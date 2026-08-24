@@ -6,6 +6,8 @@
  * - /api/sync/run: dispara harvest manualmente (operacional, não UI);
  * - /api/webhooks/pluggy: entrada de webhook autenticada por Bearer
  *   (docs/04 §webhooks) — payload é apenas aviso; a verdade vem do GET.
+ *
+ * A superfície de métricas da F2 (`/api/v1/*`) vive em `./v1.ts`.
  */
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '../db/index.js';
@@ -14,10 +16,13 @@ import { PluggyClient, PluggyError } from '../pluggy/client.js';
 import { syncItem } from '../jobs/sync.js';
 import { monthlySummary } from '../metrics.js';
 import { receiveEnvelope, processInbox } from '../jobs/inbox.js';
+import { registerV1Routes } from './v1.js';
 
 const PERIOD_RE = /^\d{4}-\d{2}$/;
 
 export function registerRoutes(app: FastifyInstance, db: Db): void {
+  registerV1Routes(app, db);
+
   app.get('/api/health', async () => {
     const integrity = db.pragma('quick_check', { simple: true });
     const lastRun = db.prepare('SELECT id, kind, ok, finished_at FROM sync_runs ORDER BY started_at DESC LIMIT 1').get();

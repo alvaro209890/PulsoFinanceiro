@@ -5,82 +5,593 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PulsoFinanceiro</title>
 <style>
-  /* Tokens de docs/08-design-system.md — dark exclusivo */
+  /* Tokens de docs/08-design-system.md — dark exclusivo, sem tema claro. */
   :root {
-    --canvas:#070A0F; --surface1:#0D121A; --surface2:#131A24;
-    --border:#202B3A; --text:#F4F7FB; --text2:#AAB6C6; --muted:#778397;
-    --brand:#38D6C7; --success:#42D392; --warning:#F6C85F; --danger:#FF667A;
+    --canvas:#070A0F; --surface1:#0D121A; --surface2:#131A24; --surface3:#1A2330;
+    --border:#202B3A; --border-strong:#344258;
+    --text:#F4F7FB; --text2:#AAB6C6; --muted:#778397;
+    --brand:#38D6C7; --brand-hover:#63E2D6; --brand-subtle:#103A3A;
+    --info:#5DA9FF; --success:#42D392; --warning:#F6C85F; --danger:#FF667A;
+    --violet:#A78BFA; --orange:#FF9E64;
+    --infinity:#86B7FF; --pulse:#36E7FF; --celebration:#FFD166;
+    --overlay:rgba(2,5,9,0.72);
+    --heat0:#111923; --heat4:#38D6C7;
   }
-  * { box-sizing: border-box; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; padding:0; }
   body {
-    margin:0; background:var(--canvas); color:var(--text);
-    font-family: system-ui, 'Segoe UI', sans-serif;
-    font-variant-numeric: tabular-nums;
+    background:var(--canvas); color:var(--text);
+    font-family:system-ui,'Segoe UI',sans-serif; font-variant-numeric:tabular-nums;
+    -webkit-font-smoothing:antialiased;
   }
-  .wrap { max-width:960px; margin:0 auto; padding:24px 16px; }
-  h1 { font-size:20px; margin:0 0 4px; }
-  .sub { color:var(--muted); font-size:12px; margin-bottom:24px; }
-  .grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); }
+  .wrap { max-width:1180px; margin:0 auto; padding:20px 14px 64px; }
+  header { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; justify-content:space-between; margin-bottom:6px; }
+  h1 { font-size:20px; margin:0; letter-spacing:-0.2px; }
+  h2 { font-size:13px; margin:0 0 12px; color:var(--text2); font-weight:600; }
+  .sub { color:var(--muted); font-size:12px; margin:2px 0 18px; }
+  select {
+    background:var(--surface2); color:var(--text); border:1px solid var(--border);
+    border-radius:10px; padding:8px 10px; font:inherit; font-size:13px;
+  }
+  select:focus-visible, button:focus-visible { outline:2px solid var(--brand); outline-offset:2px; }
+  .grid { display:grid; gap:12px; }
+  .cols-2 { grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); }
+  .cols-3 { grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); }
   .card {
-    background:var(--surface1); border:1px solid var(--border);
-    border-radius:16px; padding:16px;
+    background:var(--surface1); border:1px solid var(--border); border-radius:16px;
+    padding:16px; min-width:0;
   }
-  .metric { font-size:28px; font-weight:650; letter-spacing:-0.5px; }
-  .label { font-size:12px; font-weight:560; color:var(--text2); text-transform:none; }
+  .card.elevated { background:var(--surface2); }
+  .metric { font-size:30px; font-weight:650; letter-spacing:-0.6px; line-height:1.1; }
+  .metric.sm { font-size:22px; }
+  .label { font-size:12px; color:var(--text2); font-weight:560; }
+  .meta { font-size:11px; color:var(--muted); margin-top:6px; }
   .pos { color:var(--success); } .neg { color:var(--danger); }
+  .pending { color:var(--warning); }
+  .forecast { color:var(--violet); }
+  .row { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+  .chip {
+    display:inline-flex; align-items:center; gap:6px; font-size:10.5px; letter-spacing:.02em;
+    border:1px solid var(--border); border-radius:999px; padding:3px 9px; color:var(--text2);
+  }
+  .chip.warn { color:var(--warning); border-color:#3a3320; }
+  .chip.bad { color:var(--danger); border-color:#3a2029; }
+  .chip.ok { color:var(--success); border-color:#1e3a2c; }
+  button.link {
+    background:none; border:none; color:var(--brand); font:inherit; font-size:12px;
+    cursor:pointer; padding:4px 0; text-align:left;
+  }
+  button.link:hover { color:var(--brand-hover); }
   table { width:100%; border-collapse:collapse; font-size:13px; }
-  td,th { padding:8px; border-bottom:1px solid var(--border); text-align:left; }
-  th { color:var(--text2); font-weight:560; font-size:11px; }
-  .num { text-align:right; }
-  .badge { font-size:10px; border:1px solid var(--border); border-radius:999px; padding:2px 8px; color:var(--warning); }
+  th,td { padding:8px 6px; border-bottom:1px solid var(--border); text-align:left; }
+  th { color:var(--text2); font-weight:560; font-size:11px; text-transform:none; }
+  td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .bar { height:8px; border-radius:999px; background:var(--surface3); overflow:hidden; }
+  .bar > i { display:block; height:100%; background:var(--brand); }
+  .track { position:relative; height:14px; border-radius:999px; background:var(--surface3); overflow:hidden; }
+  .track > .done { position:absolute; inset:0 auto 0 0; background:linear-gradient(90deg,var(--brand),var(--pulse)); }
+  .track > .prov {
+    position:absolute; top:0; bottom:0;
+    background:repeating-linear-gradient(45deg,var(--warning) 0 4px,transparent 4px 8px);
+    opacity:.85;
+  }
+  .track > .mark { position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--border-strong); }
+  .stack { display:flex; height:12px; border-radius:6px; overflow:hidden; background:var(--surface3); }
+  .stack > span { display:block; height:100%; }
+  .legend { display:flex; flex-wrap:wrap; gap:10px; font-size:11px; color:var(--text2); margin-top:8px; }
+  .legend i { display:inline-block; width:9px; height:9px; border-radius:3px; margin-right:5px; vertical-align:middle; }
+  .heat { display:grid; grid-template-columns:repeat(7,minmax(14px,1fr)); gap:4px; min-width:220px; }
+  .heat > b {
+    display:block; aspect-ratio:1; border-radius:5px; background:var(--heat0);
+    border:1px solid transparent; font-size:0;
+  }
+  .heat > b.gap { background:transparent; border:1px dashed var(--border-strong); }
+  .heat-head { display:grid; grid-template-columns:repeat(7,minmax(14px,1fr)); gap:4px; font-size:10px; color:var(--muted); margin-bottom:4px; text-align:center; }
+  .scroll-x { overflow-x:auto; }
+  .rings { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .empty { color:var(--muted); font-size:12px; }
+  dialog {
+    background:var(--surface2); color:var(--text); border:1px solid var(--border);
+    border-radius:16px; padding:0; max-width:min(680px,94vw); width:100%;
+  }
+  dialog::backdrop { background:var(--overlay); }
+  .drawer-head { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; border-bottom:1px solid var(--border); }
+  .drawer-body { padding:8px 16px 16px; max-height:60vh; overflow:auto; }
+  .pulse-ring { transition:stroke-dashoffset .9s ease; }
+  .spark { width:100%; height:44px; display:block; }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation:none !important; transition:none !important; }
+  }
+  @media (max-width:420px) {
+    .metric { font-size:26px; }
+    .wrap { padding:16px 10px 56px; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Pulso <span style="color:var(--brand)">Financeiro</span></h1>
-  <div class="sub">painel financeiro automático · base F0 · dados via Pluggy, cálculo local</div>
+  <header>
+    <div>
+      <h1>Pulso <span style="color:var(--brand)">Financeiro</span></h1>
+      <div class="sub" id="subtitle">painel automático · números calculados no backend</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span class="chip" id="health">saúde: —</span>
+      <label class="label" for="period">período</label>
+      <select id="period" aria-label="Período"></select>
+    </div>
+  </header>
 
-  <div class="grid" id="kpis">
-    <div class="card"><div class="label">Entradas (mês)</div><div class="metric" id="kpi-income">—</div></div>
-    <div class="card"><div class="label">Gastos (mês)</div><div class="metric" id="kpi-spend">—</div></div>
-    <div class="card"><div class="label">Resultado</div><div class="metric" id="kpi-net">—</div></div>
-    <div class="card"><div class="label">Provisórios</div><div class="metric" id="kpi-pending">—</div><span class="badge" id="kpi-pending-badge" hidden>provisório</span></div>
+  <div id="alerts" class="grid" style="margin-bottom:12px"></div>
+
+  <!-- Sentinela de Camadas: patrimônio observável em camadas reais do contrato -->
+  <section class="grid cols-2" style="margin-bottom:12px">
+    <div class="card">
+      <h2>Patrimônio observável</h2>
+      <div class="rings">
+        <svg width="120" height="120" viewBox="0 0 120 120" role="img" aria-labelledby="nw-title">
+          <title id="nw-title">Camadas do patrimônio observável</title>
+          <circle cx="60" cy="60" r="52" fill="none" stroke="var(--surface3)" stroke-width="9"></circle>
+          <circle id="ring-bank" class="pulse-ring" cx="60" cy="60" r="52" fill="none"
+                  stroke="var(--infinity)" stroke-width="9" stroke-linecap="round"
+                  stroke-dasharray="327" stroke-dashoffset="327" transform="rotate(-90 60 60)"></circle>
+          <circle cx="60" cy="60" r="38" fill="none" stroke="var(--surface3)" stroke-width="9"></circle>
+          <circle id="ring-bill" class="pulse-ring" cx="60" cy="60" r="38" fill="none"
+                  stroke="var(--orange)" stroke-width="9" stroke-linecap="round"
+                  stroke-dasharray="239" stroke-dashoffset="239" transform="rotate(-90 60 60)"></circle>
+        </svg>
+        <div style="flex:1;min-width:150px">
+          <div class="metric" id="nw-amount">—</div>
+          <div class="meta" id="nw-change">variação indisponível</div>
+          <div class="legend">
+            <span><i style="background:var(--infinity)"></i>saldo em conta</span>
+            <span><i style="background:var(--orange)"></i>fatura aberta</span>
+          </div>
+        </div>
+      </div>
+      <svg class="spark" id="nw-spark" viewBox="0 0 300 44" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <div id="nw-components" class="meta"></div>
+    </div>
+
+    <!-- Condutor do Pulso: descarga única quando a razão muda -->
+    <div class="card">
+      <h2>Termômetro do mês</h2>
+      <div class="row">
+        <div class="metric sm" id="pace-value">—</div>
+        <span class="chip" id="pace-quality">—</span>
+      </div>
+      <div class="meta" id="pace-text">sem histórico comparável suficiente</div>
+      <div class="track" style="margin-top:14px" role="img" aria-labelledby="pace-text">
+        <span class="done" id="pace-done" style="width:0"></span>
+        <span class="prov" id="pace-prov" style="left:0;width:0"></span>
+        <span class="mark" id="pace-mark" style="left:50%"></span>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--brand)"></i>confirmado</span>
+        <span><i style="background:var(--warning)"></i>provisório</span>
+        <span><i style="background:var(--border-strong)"></i>seu padrão até hoje (100%)</span>
+      </div>
+      <button class="link" data-composition="spend">Ver composição</button>
+    </div>
+  </section>
+
+  <section class="grid cols-3" style="margin-bottom:12px">
+    <div class="card">
+      <div class="label">Gasto confirmado</div>
+      <div class="metric sm" id="kpi-spend">—</div>
+      <div class="meta pending" id="kpi-pending">provisório —</div>
+    </div>
+    <div class="card">
+      <div class="label">Projeção de fechamento</div>
+      <div class="metric sm forecast" id="kpi-forecast">—</div>
+      <div class="meta" id="kpi-forecast-range">faixa —</div>
+      <div class="stack" style="margin-top:10px" id="forecast-stack" role="img" aria-label="Composição da projeção"></div>
+      <div class="legend">
+        <span><i style="background:var(--brand)"></i>realizado</span>
+        <span><i style="background:var(--warning)"></i>provisório</span>
+        <span><i style="background:var(--violet)"></i>ritmo futuro</span>
+      </div>
+      <div class="meta" id="forecast-reasons"></div>
+    </div>
+    <div class="card">
+      <div class="label">Dia mais caro</div>
+      <div class="metric sm" id="kpi-topday">—</div>
+      <div class="meta" id="kpi-topday-date">—</div>
+      <button class="link" id="topday-link" data-composition="topday">Ver composição</button>
+    </div>
+  </section>
+
+  <section class="grid cols-2" style="margin-bottom:12px">
+    <div class="card">
+      <h2>Concentração no mês</h2>
+      <div class="scroll-x">
+        <div class="heat-head"><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span><span>D</span></div>
+        <div class="heat" id="heat" role="img" aria-label="Mapa de calor de gasto por dia"></div>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--heat0)"></i>sem gasto</span>
+        <span><i style="background:var(--heat4)"></i>maior gasto</span>
+        <span><i style="border:1px dashed var(--border-strong);background:transparent"></i>lacuna de sincronização</span>
+      </div>
+      <table style="margin-top:10px">
+        <thead><tr><th>Dia da semana</th><th class="num">Média</th><th class="num">Ocorrências</th></tr></thead>
+        <tbody id="weekdays"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Gasto por categoria</h2>
+      <div id="cats"><div class="empty">carregando…</div></div>
+    </div>
+  </section>
+
+  <div class="meta" id="footer-meta"></div>
+</div>
+
+<dialog id="drawer">
+  <div class="drawer-head">
+    <strong id="drawer-title" style="font-size:14px">Composição</strong>
+    <button class="link" id="drawer-close">fechar</button>
   </div>
-
-  <p style="height:16px"></p>
-  <div class="card">
+  <div class="drawer-body">
     <table>
-      <thead><tr><th>Categoria</th><th class="num">Total</th></tr></thead>
-      <tbody id="cats"><tr><td colspan="2" style="color:var(--muted)">carregando…</td></tr></tbody>
+      <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th class="num">Valor</th></tr></thead>
+      <tbody id="drawer-rows"></tbody>
     </table>
   </div>
-</div>
+</dialog>
+
 <script type="module">
-  const fmt = new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' });
-  const period = new Date().toISOString().slice(0,7);
-  try {
-    const r = await fetch(`/api/summary?period=${period}`);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const d = await r.json();
-    document.getElementById('kpi-income').textContent = fmt.format(d.income);
-    const spend = document.getElementById('kpi-spend');
-    spend.textContent = fmt.format(d.spend);
-    const net = document.getElementById('kpi-net');
-    net.textContent = fmt.format(d.net);
-    net.className = 'metric ' + (d.net >= 0 ? 'pos' : 'neg');
-    const pend = document.getElementById('kpi-pending');
-    pend.textContent = String(d.pendingCount);
-    if (d.pendingCount > 0) document.getElementById('kpi-pending-badge').hidden = false;
-    const tb = document.getElementById('cats');
-    tb.innerHTML = d.byCategory.length
-      ? d.byCategory.slice(0,10).map(c =>
-        `<tr><td>${c.label ?? c.categoryId ?? 'sem categoria'}</td><td class="num">${fmt.format(c.total)}</td></tr>`
-      ).join('')
-      : '<tr><td colspan="2" style="color:var(--muted)">nenhuma transação confirmada neste mês</td></tr>';
-  } catch (e) {
-    for (const id of ['kpi-income','kpi-spend','kpi-net','kpi-pending'])
-      document.getElementById(id).textContent = 'indisponível';
+/**
+ * O frontend NÃO recalcula gasto, patrimônio, projeção nem severidade
+ * (docs/07 §princípio). Ele formata data/moeda/cor e escala barras.
+ * Zero é valor; ausência é estado: `null` vira “—” com o motivo, nunca 0.
+ */
+const brl = new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' });
+const money = (v, currency) => v === null || v === undefined
+  ? '—'
+  : (currency && currency !== 'BRL'
+      ? new Intl.NumberFormat('pt-BR', { style:'currency', currency }).format(v)
+      : brl.format(v));
+const pct = (v) => v === null || v === undefined ? '—' : `${v.toFixed(2).replace('.', ',')}%`;
+const el = (id) => document.getElementById(id);
+
+const QUALITY_TEXT = {
+  complete: ['ok', 'dados completos'],
+  partial: ['warn', 'dados parciais'],
+  insufficient: ['warn', 'histórico insuficiente'],
+  stale: ['warn', 'dado desatualizado'],
+  not_comparable: ['warn', 'moedas não comparáveis'],
+  unavailable: ['bad', 'indisponível'],
+};
+
+const state = { month: new Date().toISOString().slice(0,7), lastRatio: null, period: null };
+
+function monthRange(month) {
+  const [y, m] = month.split('-').map(Number);
+  const nextY = m === 12 ? y + 1 : y;
+  const nextM = m === 12 ? 1 : m + 1;
+  return { from: `${month}-01`, to: `${nextY}-${String(nextM).padStart(2,'0')}-01` };
+}
+
+function fillPeriods() {
+  const select = el('period');
+  const now = new Date();
+  for (let i = 0; i < 6; i += 1) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    const value = d.toISOString().slice(0,7);
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = new Intl.DateTimeFormat('pt-BR', { month:'long', year:'numeric', timeZone:'UTC' }).format(d);
+    select.append(option);
   }
+  select.value = state.month;
+  select.addEventListener('change', () => { state.month = select.value; load(); });
+}
+
+async function getJson(url) {
+  const res = await fetch(url, { headers: { accept:'application/json' } });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw Object.assign(new Error(body?.error?.code ?? `HTTP_${res.status}`), { body });
+  }
+  return res.json();
+}
+
+async function load() {
+  const { from, to } = monthRange(state.month);
+  state.period = { from, to };
+  try {
+    const [overview, pace, categories, health] = await Promise.all([
+      getJson(`/api/v1/dashboard/overview?from=${from}&to=${to}`),
+      getJson(`/api/v1/analytics/monthly-pace?month=${state.month}`).catch((e) => ({ error: e })),
+      getJson(`/api/v1/analytics/categories?from=${from}&to=${to}`).catch((e) => ({ error: e })),
+      getJson('/api/health').catch(() => null),
+    ]);
+    renderHealth(health, overview);
+    renderNetWorth(overview);
+    renderPace(pace, overview);
+    renderKpis(overview);
+    renderHeat(overview);
+    renderCategories(categories);
+    renderAlerts(overview);
+    el('footer-meta').textContent =
+      `calculado em ${new Date(overview.computedAt).toLocaleString('pt-BR')} · dado até ` +
+      `${overview.dataThrough ? new Date(overview.dataThrough).toLocaleString('pt-BR') : 'sem harvest registrado'} · ` +
+      `${overview.metricVersion} · qualidade ${overview.quality}`;
+  } catch (err) {
+    el('subtitle').textContent = `não foi possível carregar as métricas (${err.message})`;
+  }
+}
+
+function qualityChip(node, quality) {
+  const [kind, text] = QUALITY_TEXT[quality] ?? ['warn', quality];
+  node.className = `chip ${kind}`;
+  node.textContent = text;
+}
+
+function renderHealth(health, overview) {
+  const chip = el('health');
+  if (!health) { chip.className = 'chip bad'; chip.textContent = 'saúde: sem resposta'; return; }
+  const staleness = health.sync?.staleness ?? 'OK';
+  chip.className = `chip ${staleness === 'OK' ? 'ok' : staleness === 'WARNING' ? 'warn' : 'bad'}`;
+  chip.textContent = `sync: ${staleness.toLowerCase()}`;
+  el('subtitle').textContent =
+    `período ${overview.period.from} → ${overview.period.to} (fim exclusivo) · ${overview.period.timezone}`;
+}
+
+function renderNetWorth(overview) {
+  const nw = overview.data.netWorth;
+  el('nw-amount').textContent = money(nw.amount, nw.currencyCode);
+  const change = nw.changeAmount;
+  const changeNode = el('nw-change');
+  if (change === null) {
+    changeNode.className = 'meta';
+    changeNode.textContent = 'sem snapshot anterior ao período — variação indisponível (lacuna, não zero)';
+  } else {
+    changeNode.className = `meta ${change >= 0 ? 'pos' : 'neg'}`;
+    changeNode.textContent = `${change >= 0 ? '+' : ''}${money(change, nw.currencyCode)} no período · ${pct(nw.changePercent)}`;
+  }
+
+  const components = overview.data.netWorthComponents;
+  const bank = components.filter((c) => c.kind === 'BANK_BALANCE').reduce((a, c) => a + (c.amount ?? 0), 0);
+  const bill = Math.abs(components.filter((c) => c.kind === 'OPEN_BILL').reduce((a, c) => a + (c.amount ?? 0), 0));
+  // Escala visual dos anéis (proporção), não recálculo de métrica.
+  const total = bank + bill;
+  setRing('ring-bank', 327, total > 0 ? bank / total : 0);
+  setRing('ring-bill', 239, total > 0 ? bill / total : 0);
+
+  el('nw-components').innerHTML = components.length === 0
+    ? '<span class="empty">nenhum snapshot capturado ainda</span>'
+    : components.map((c) => {
+        const detail = c.kind === 'OPEN_BILL'
+          ? `fatura aberta${c.dueDate ? ` · vence ${c.dueDate}` : ''} · fonte ${c.source}`
+          : 'saldo em conta';
+        return `<div>${c.label}: <strong>${money(c.amount, overview.currencyCode)}</strong> — ${detail}${c.quality !== 'complete' ? ' · parcial' : ''}</div>`;
+      }).join('');
+
+  drawSpark(overview.data.netWorthSeries);
+}
+
+function setRing(id, circumference, ratio) {
+  const node = el(id);
+  node.setAttribute('stroke-dashoffset', String(circumference * (1 - Math.max(0, Math.min(1, ratio)))));
+}
+
+function drawSpark(series) {
+  const svg = el('nw-spark');
+  if (!series || series.length < 2) {
+    svg.innerHTML = '<text x="4" y="26" fill="#778397" font-size="10">série começa no primeiro snapshot local</text>';
+    return;
+  }
+  const values = series.map((p) => p.amount);
+  const min = Math.min(...values); const max = Math.max(...values);
+  const span = max - min || 1;
+  const points = series.map((p, i) => {
+    const x = (i / (series.length - 1)) * 300;
+    const y = 40 - ((p.amount - min) / span) * 34;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const partial = series.some((p) => p.quality !== 'complete');
+  svg.innerHTML =
+    `<polyline points="${points}" fill="none" stroke="var(--brand)" stroke-width="2"` +
+    `${partial ? ' stroke-dasharray="5 3"' : ''}></polyline>`;
+}
+
+function renderPace(pace, overview) {
+  if (pace.error) {
+    el('pace-value').textContent = '—';
+    el('pace-text').textContent = 'mês fora da cobertura local de dados';
+    qualityChip(el('pace-quality'), 'unavailable');
+    return;
+  }
+  const ratio = pace.data.paceRatio.value;
+  qualityChip(el('pace-quality'), pace.quality);
+  if (ratio === null) {
+    el('pace-value').textContent = '—';
+    el('pace-text').textContent =
+      `sem base comparável (${pace.counts.sampleMonths} de 3 meses necessários) — nenhum percentual é inventado`;
+  } else {
+    const deltaPct = (ratio - 1) * 100;
+    el('pace-value').textContent = pct(ratio * 100);
+    el('pace-text').textContent =
+      `${Math.abs(deltaPct).toFixed(1).replace('.', ',')}% ${deltaPct >= 0 ? 'acima' : 'abaixo'} do seu padrão até este dia · ` +
+      `média ${money(pace.data.historicalSameDaysAverage?.amount ?? null, pace.currencyCode)}`;
+    el('pace-value').className = `metric sm ${deltaPct > 0 ? 'neg' : 'pos'}`;
+  }
+
+  // Escala da barra: 100% do padrão fica na marca central.
+  const confirmed = pace.data.confirmedSpend.amount;
+  const pending = pace.data.pendingSpend.amount;
+  const reference = pace.data.historicalSameDaysAverage?.amount ?? null;
+  const scale = reference && reference > 0 ? reference * 2 : Math.max(confirmed + pending, 1);
+  const donePct = Math.min(100, (confirmed / scale) * 100);
+  const provPct = Math.min(100 - donePct, (pending / scale) * 100);
+  el('pace-done').style.width = `${donePct}%`;
+  el('pace-prov').style.left = `${donePct}%`;
+  el('pace-prov').style.width = `${provPct}%`;
+  el('pace-mark').style.left = reference && reference > 0 ? '50%' : '100%';
+
+  // Condutor do Pulso: uma descarga curta quando a razão muda de valor.
+  if (state.lastRatio !== null && ratio !== null && ratio !== state.lastRatio) {
+    const done = el('pace-done');
+    done.animate(
+      [{ filter:'brightness(1)' }, { filter:'brightness(1.9)' }, { filter:'brightness(1)' }],
+      { duration:600, easing:'ease-out' }
+    );
+  }
+  state.lastRatio = ratio;
+  void overview;
+}
+
+function renderKpis(overview) {
+  const spend = overview.data.monthSpend;
+  el('kpi-spend').textContent = money(spend.posted, spend.currencyCode);
+  el('kpi-pending').textContent = spend.pending > 0
+    ? `provisório ${money(spend.pending, spend.currencyCode)} — fora do realizado`
+    : 'sem provisórios no período';
+
+  const forecast = overview.data.forecast;
+  if (!forecast) {
+    el('kpi-forecast').textContent = '—';
+    el('kpi-forecast-range').textContent = 'projeção só existe em recorte mensal';
+    el('forecast-stack').innerHTML = '';
+    el('forecast-reasons').textContent = '';
+  } else {
+    el('kpi-forecast').textContent = money(forecast.amount, forecast.currencyCode);
+    el('kpi-forecast-range').textContent =
+      `faixa ${money(forecast.rangeLow, forecast.currencyCode)} – ${money(forecast.rangeHigh, forecast.currencyCode)} · confiança ${forecast.confidence.toLowerCase()}`;
+    const parts = [
+      [spend.posted, 'var(--brand)'],
+      [spend.pending, 'var(--warning)'],
+      [Math.max(0, forecast.amount - spend.posted - spend.pending), 'var(--violet)'],
+    ];
+    const total = parts.reduce((a, [v]) => a + v, 0) || 1;
+    el('forecast-stack').innerHTML = parts
+      .map(([v, color]) => `<span style="width:${(v / total) * 100}%;background:${color}"></span>`)
+      .join('');
+    el('forecast-reasons').textContent = forecast.reasonCodes.join(' · ');
+  }
+
+  const top = overview.data.mostExpensiveDay;
+  el('kpi-topday').textContent = top ? money(top.amount, overview.currencyCode) : '—';
+  el('kpi-topday-date').textContent = top
+    ? `${top.date} · ${top.transactionRefs.length} transação(ões)`
+    : 'nenhum gasto confirmado no período';
+  el('topday-link').hidden = !top;
+}
+
+function renderHeat(overview) {
+  const days = overview.data.dailySpend;
+  const heat = el('heat');
+  const max = Math.max(0, ...days.map((d) => d.amount));
+  const first = days[0];
+  const lead = first ? (new Date(`${first.date}T00:00:00Z`).getUTCDay() + 6) % 7 : 0;
+  heat.innerHTML =
+    Array.from({ length: lead }, () => '<b style="background:transparent;border:none"></b>').join('') +
+    days.map((d) => {
+      if (d.coverage === 'gap') {
+        return `<b class="gap" title="${d.date}: lacuna de sincronização"></b>`;
+      }
+      const step = max > 0 ? Math.ceil((d.amount / max) * 4) : 0;
+      const bg = step === 0 ? 'var(--heat0)' : `color-mix(in srgb, var(--heat4) ${step * 25}%, var(--heat0))`;
+      const border = d.coverage === 'partial' ? ';border-color:var(--warning)' : '';
+      return `<b style="background:${bg}${border}" title="${d.date}: ${money(d.amount, overview.currencyCode)}${d.coverage === 'partial' ? ' (dia em andamento)' : ''}"></b>`;
+    }).join('');
+
+  const names = ['segunda','terça','quarta','quinta','sexta','sábado','domingo'];
+  el('weekdays').innerHTML = overview.data.weekdayAverages.length === 0
+    ? '<tr><td colspan="3" class="empty">sem dias cobertos no período</td></tr>'
+    : overview.data.weekdayAverages.map((w) =>
+        `<tr><td>${names[w.weekday - 1]}</td><td class="num">${money(w.amount, overview.currencyCode)}</td>` +
+        `<td class="num">${w.coveredOccurrences}</td></tr>`
+      ).join('');
+}
+
+function renderCategories(result) {
+  const node = el('cats');
+  if (result.error) {
+    node.innerHTML = '<div class="empty">categorias indisponíveis para o período</div>';
+    return;
+  }
+  const categories = result.data.categories;
+  if (categories.length === 0) {
+    node.innerHTML = '<div class="empty">nenhum gasto confirmado no período</div>';
+    return;
+  }
+  const max = Math.max(...categories.map((c) => c.postedAmount)) || 1;
+  node.innerHTML = categories.map((c) => {
+    const delta = c.newInPeriod
+      ? '<span class="chip">nova no período</span>'
+      : `<span class="${c.deltaAmount > 0 ? 'neg' : 'pos'}">${c.deltaAmount > 0 ? '+' : ''}${money(c.deltaAmount, result.currencyCode)} · ${pct(c.deltaPercent)}</span>`;
+    const children = c.children.map((ch) =>
+      `<div class="meta" style="padding-left:10px">${ch.label ?? 'sem rótulo'} — ${money(ch.postedAmount, result.currencyCode)}</div>`
+    ).join('');
+    return `
+      <div style="margin-bottom:14px">
+        <div class="row">
+          <strong style="font-size:13px">${c.label}</strong>
+          <span style="font-size:13px">${money(c.postedAmount, result.currencyCode)}</span>
+        </div>
+        <div class="bar" style="margin:6px 0"><i style="width:${(c.postedAmount / max) * 100}%"></i></div>
+        <div class="meta">${delta}</div>
+        ${children}
+        <button class="link" data-composition="category" data-root="${c.rootCode}">Ver composição</button>
+      </div>`;
+  }).join('');
+}
+
+function renderAlerts(overview) {
+  const alerts = overview.data.alerts;
+  el('alerts').innerHTML = alerts.length === 0 ? '' : alerts.map((a) => {
+    const kind = a.severity === 'CRITICAL' || a.severity === 'HIGH' ? 'bad' : 'warn';
+    return `<div class="card elevated"><span class="chip ${kind}">${a.severity.toLowerCase()}</span>
+      <span style="margin-left:8px;font-size:13px">${a.type}</span>
+      <span class="meta">ocorrências: ${a.occurrenceCount}</span></div>`;
+  }).join('');
+}
+
+// Evidências: o drawer lista o que o backend já classificou.
+document.addEventListener('click', async (event) => {
+  const trigger = event.target.closest('[data-composition]');
+  if (!trigger) return;
+  const kind = trigger.dataset.composition;
+  const { from, to } = state.period;
+  let url = `/api/v1/transactions?from=${from}&to=${to}&status=POSTED&eligibility=SPEND&limit=50`;
+  let title = 'Composição do gasto confirmado';
+  if (kind === 'category') {
+    url += `&categoryRoot=${trigger.dataset.root}`;
+    title = 'Composição da categoria';
+  }
+  if (kind === 'topday') {
+    const date = el('kpi-topday-date').textContent.split(' · ')[0];
+    const next = new Date(`${date}T00:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    url = `/api/v1/transactions?from=${date}&to=${next.toISOString().slice(0,10)}&status=POSTED&eligibility=SPEND&limit=50`;
+    title = `Composição de ${date}`;
+  }
+  el('drawer-title').textContent = title;
+  el('drawer-rows').innerHTML = '<tr><td colspan="4" class="empty">carregando…</td></tr>';
+  el('drawer').showModal();
+  try {
+    const page = await getJson(url);
+    el('drawer-rows').innerHTML = page.data.length === 0
+      ? '<tr><td colspan="4" class="empty">nenhuma linha</td></tr>'
+      : page.data.map((t) => `
+        <tr>
+          <td>${t.date}</td>
+          <td>${t.description ?? '—'}${t.effectiveInternalTransfer ? ' <span class="chip">fora do gasto</span>' : ''}</td>
+          <td>${t.category.label ?? 'Sem categoria'}</td>
+          <td class="num">${money(t.amount, t.currencyCode)}</td>
+        </tr>`).join('');
+  } catch {
+    el('drawer-rows').innerHTML = '<tr><td colspan="4" class="empty">não foi possível abrir a composição</td></tr>';
+  }
+});
+el('drawer-close').addEventListener('click', () => el('drawer').close());
+
+fillPeriods();
+load();
 </script>
 </body>
 </html>

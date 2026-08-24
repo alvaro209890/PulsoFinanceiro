@@ -10,6 +10,9 @@ import { ulid } from 'ulid';
 import type { PluggyClient, PluggyTransactionPage } from '../pluggy/client.js';
 import { sanitizeDeep } from '../pluggy/sanitize.js';
 import { upsertAccount, upsertTransaction } from '../db/upserts.js';
+import { captureDailySnapshots } from '../db/snapshots.js';
+import { evaluatePaceEvent } from '../finance/events.js';
+import { bumpDataRevision } from '../finance/envelope.js';
 
 export interface SyncResult {
   runId: string;
@@ -74,6 +77,16 @@ export async function syncItem(
       `UPDATE sync_runs SET finished_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'), ok=1,
        pages_fetched=?, txs_upserted=? WHERE id=?`
     ).run(pagesFetched, txsUpserted, runId);
+
+    // F2: fotografia do dia, avaliação determinística do ritmo e revisão de
+    // dados no MESMO commit que confirma a métrica (docs/09 §4.1, docs/12 F2).
+    const closeRun = db.transaction(() => {
+      captureDailySnapshots(db, { syncRunId: runId });
+      evaluatePaceEvent(db);
+      bumpDataRevision(db);
+    });
+    closeRun();
+
     return { runId, kind, pagesFetched, txsUpserted, ok: true };
   } catch (err) {
     const code = err instanceof Error ? err.message.slice(0, 60) : 'UNKNOWN';

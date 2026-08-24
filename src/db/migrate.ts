@@ -2,11 +2,13 @@
  * Schema do banco — fonte: docs/05-modelo-de-dados.md.
  *
  * Base mínima da F0/F1 (migração 0001): categorias, contas, transações,
- * itens, outbox de eventos e milestones. Upsert por ID externo preserva
+ * itens, outbox de eventos e milestones. A 0003 acrescenta o núcleo
+ * financeiro da F2 (snapshots, faturas, matches de pagamento). Upsert por ID externo preserva
  * o public_id local ULID (docs/04 §6).
  */
 import type Database from 'better-sqlite3';
 import { MIGRATION_0002 } from './migrations-0002.js';
+import { MIGRATION_0003 } from './migrations-0003.js';
 
 export const MIGRATIONS: readonly { id: number; name: string; sql: string }[] = [
   {
@@ -138,6 +140,7 @@ CREATE TABLE IF NOT EXISTS service_principals (
 `,
   },
   MIGRATION_0002,
+  MIGRATION_0003,
 ];
 
 /** Aplica migrações pendentes. Idempotente e transacional por migração. */
