@@ -778,14 +778,14 @@ function renderCard(card) {
     : '';
 
   const cats = bill.categoryBreakdown;
-  const maxCat = Math.max(...cats.map((c) => c.debitPosted), 0) || 1;
+  const maxCat = Math.max(...cats.map((c) => c.debitPosted + c.debitPending), 0) || 1;
   el('bill-categories').innerHTML = cats.length === 0
     ? '<div class="empty">nenhum débito no ciclo</div>'
     : cats.map((c) => `
         <div style="margin-bottom:10px">
-          <div class="row"><span style="font-size:13px">${c.categoryId ?? 'Sem categoria'}</span>
+          <div class="row"><span style="font-size:13px">${c.categoryLabel ?? c.categoryId ?? 'Sem categoria'}</span>
             <span style="font-size:13px">${money(c.debitPosted, card.currencyCode)}</span></div>
-          <div class="bar" style="margin:5px 0"><i style="width:${(c.debitPosted / maxCat) * 100}%"></i></div>
+          <div class="bar" style="margin:5px 0"><i style="width:${((c.debitPosted + c.debitPending) / maxCat) * 100}%"></i></div>
           ${c.debitPending > 0 ? `<div class="meta pending">provisório ${money(c.debitPending, card.currencyCode)}</div>` : ''}
         </div>`).join('');
 
@@ -797,7 +797,7 @@ function renderCard(card) {
     `<tr><td>encargos das faturas</td><td class="num">${money(costs.financeCharges.amount, card.currencyCode)}</td>` +
     `<td class="num">${costs.financeCharges.count}</td></tr>` +
     costs.categoryTransactions.map((c) =>
-      `<tr><td>transações da categoria ${c.categoryId}</td><td class="num">${money(c.amount, card.currencyCode)}</td>` +
+      `<tr><td>transações da categoria ${c.categoryLabel ?? c.categoryId}</td><td class="num">${money(c.amount, card.currencyCode)}</td>` +
       `<td class="num">${c.count}</td></tr>`).join('');
 }
 

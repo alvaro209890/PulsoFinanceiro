@@ -174,6 +174,12 @@ export function computeCreditCard(db: Db, options: CreditCardOptions = {}): Cred
   let matchedCardCredits = 0;
   let cardCreditUnclassified = 0;
   const byCategory = new Map<string, { posted: number; pending: number }>();
+  const categoryLabels = new Map(
+    (db.prepare('SELECT id, description_translated FROM categories').all() as Array<{
+      id: string;
+      description_translated: string;
+    }>).map((r) => [r.id, r.description_translated])
+  );
 
   for (const r of cycleRows) {
     const minor = Math.round(Math.abs(r.amount) * 100);
@@ -257,8 +263,12 @@ export function computeCreditCard(db: Db, options: CreditCardOptions = {}): Cred
             AND substr(date,1,4) = ?`
       )
       .get(categoryId, year) as { total: number; n: number };
+    const labelRow = db
+      .prepare('SELECT description_translated FROM categories WHERE id = ?')
+      .get(categoryId) as { description_translated: string } | undefined;
     return {
       categoryId,
+      categoryLabel: labelRow?.description_translated ?? null,
       amount: Math.round(row.total * 100) / 100,
       count: row.n,
       metricIds: {
@@ -365,6 +375,7 @@ export function computeCreditCard(db: Db, options: CreditCardOptions = {}): Cred
         categoryBreakdown: [...byCategory.entries()]
           .map(([categoryId, v]) => ({
             categoryId: categoryId === 'sem-categoria' ? null : categoryId,
+            categoryLabel: categoryId === 'sem-categoria' ? null : categoryLabels.get(categoryId) ?? null,
             debitPosted: fromMinor(v.posted),
             debitPending: fromMinor(v.pending),
             metricIds: {
@@ -372,7 +383,7 @@ export function computeCreditCard(db: Db, options: CreditCardOptions = {}): Cred
               debitPending: `current-bill-category-debit-pending:${categoryId}:${cycle}`,
             },
           }))
-          .sort((a, b) => b.debitPosted - a.debitPosted),
+          .sort((a, b) => (b.debitPosted + b.debitPending) - (a.debitPosted + a.debitPending)),
         cycleUnassigned: {
           transactionCount: unassigned.n,
           absoluteAmount: Math.round(unassigned.total * 100) / 100,
