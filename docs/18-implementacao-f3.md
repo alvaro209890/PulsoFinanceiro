@@ -153,7 +153,48 @@ recorrências mostra cadência, escores, confiança, estado e evidência.
 | nenhuma cópia afirma uso, cancelamento, fraude ou inadimplência sem dado | **coberto** por teste que varre o payload |
 | repetir o cálculo no mesmo ciclo não duplica evento de outbox | **coberto** |
 
-## 5. Como rodar
+## 5. Onde está rodando
+
+O produto saiu do notebook: roda no `server-desktop` como serviço de usuário
+do systemd, com harvest diário automático.
+
+| Item | Valor |
+|---|---|
+| Serviço | `pulso-financeiro.service` (systemd `--user`, `enabled` + `Linger=yes`, sobe no boot sem login) |
+| Código | `/media/server/HD Backup/Servidores_NAO_MEXA/PulsoFinanceiro` (`npm run build`, executa `dist/`) |
+| Banco | `/home/server/pulso-data/pulso.sqlite` — **ext4**, fora do HD externo |
+| Segredos | `/home/server/pulso-data/pulso.env`, modo `600`, lido por `EnvironmentFile=` |
+| Bind | `127.0.0.1:3040` |
+| Acesso | `http://server-desktop:8080` via `tailscale serve` — **somente tailnet** |
+| Harvest | agendado no processo, 04:30; carga inicial rodou 2.088 transações e 12 faturas |
+
+Duas decisões de segurança valem registro:
+
+1. **Os segredos não ficam no HD externo.** O `HD Backup` não guarda modo de
+   arquivo (`chmod 600` vira `777` na prática), então `.env` mora no `ext4` e
+   o `unit` aponta para lá com `EnvironmentFile=`. O `unit` também declara
+   `After=`/`Wants=` do mount, para não subir antes do disco montar.
+2. **Nada foi publicado na internet.** `tailscale serve` expõe apenas dentro
+   da tailnet do titular; `tailscale funnel` (que seria público) continua
+   desligado. A exposição por `pulso.cursar.space` com identidade validada no
+   origin permanece na F6, como o roadmap manda — dado financeiro não vai para
+   a internet aberta só porque é conveniente.
+
+**Limite honesto do acesso atual:** qualquer dispositivo já autenticado na
+tailnet abre o painel sem provar identidade de novo. Para o uso pessoal de um
+titular só, isso é aceitável; para qualquer coisa além disso, vale a borda da
+F6.
+
+Comandos de operação:
+
+```bash
+ssh sd 'systemctl --user status pulso-financeiro.service'
+ssh sd 'journalctl --user -u pulso-financeiro.service -n 50 --no-pager'
+ssh sd 'curl -s -X POST http://127.0.0.1:3040/api/sync/run'   # harvest sob demanda
+ssh sd 'tailscale serve --http=8080 off'                      # revogar o acesso
+```
+
+## 6. Como rodar localmente
 
 ```bash
 npm install
@@ -168,8 +209,8 @@ npm test                   # 104 testes
 - Webhook `pulso-hooks.cursar.space` continua sem provisionar na Pluggy: a
   aplicação não tem webhook configurado e o harvest agendado é o único
   gatilho hoje.
-- Publicação humana exige a decisão de borda da F6; enquanto isso o serviço
-  só escuta em `127.0.0.1`.
+- Publicação humana exige a decisão de borda da F6; hoje o serviço escuta em
+  `127.0.0.1` e só é alcançável pela tailnet.
 - `overlapStatus` dos encargos segue `UNVERIFIED`; deduplicar exige evidência
   e nova `metricVersion`.
 - Heurística conservadora de transferência interna (valores espelhados em

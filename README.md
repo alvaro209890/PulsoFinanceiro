@@ -2,7 +2,7 @@
 
 Painel financeiro pessoal, automático e self-hosted para transformar os dados já sincronizados pela Pluggy em visão consolidada, alertas e explicações acionáveis. O produto tem um único usuário, não possui cadastro nem autenticação própria e não recebe lançamentos manuais.
 
-> Estado: **F0 a F3 implementadas e rodando contra a conta real** — Fastify + SQLite + cliente Pluggy + webhook inbox + staleness + outbox + núcleo financeiro determinístico + cartão e recorrências, com 104 testes. O serviço escuta apenas em `127.0.0.1:3040`; publicação humana espera a decisão de borda da F6. Diários de execução em [`docs/17-implementacao-f2.md`](docs/17-implementacao-f2.md) e [`docs/18-implementacao-f3.md`](docs/18-implementacao-f3.md).
+> Estado: **F0 a F3 implementadas, rodando contra a conta real e no ar no `server-desktop`** — Fastify + SQLite + cliente Pluggy + webhook inbox + staleness + outbox + núcleo financeiro determinístico + cartão e recorrências, com 104 testes. O serviço escuta apenas em `127.0.0.1:3040`; publicação humana espera a decisão de borda da F6. Diários de execução em [`docs/17-implementacao-f2.md`](docs/17-implementacao-f2.md) e [`docs/18-implementacao-f3.md`](docs/18-implementacao-f3.md).
 
 ## Nome
 
@@ -22,6 +22,21 @@ Foram considerados:
 - Permitir somente duas correções de dados em um clique: categoria e transferência interna.
 - Entregar um frontend dark-only, muito animado e com 3D progressivo, usando arquétipos originais de leitura/proteção, pulso elétrico e conquista determinística para tornar organização e economia mais claras.
 - Planejar uma fase futura em que o Hermes pergunta em Discord privado sobre transação sem contexto e reaplica a resposta segura em repetições, sem acoplar canal ao backend.
+
+## Onde está rodando
+
+| Item | Valor |
+|---|---|
+| Serviço | `pulso-financeiro.service` no `server-desktop` (systemd `--user`, sobe no boot) |
+| Bind | `127.0.0.1:3040` |
+| Acesso | `http://server-desktop:8080` — **somente pela tailnet** (`tailscale serve`; `funnel` desligado) |
+| Banco | `/home/server/pulso-data/pulso.sqlite` (ext4, fora do HD externo) |
+| Segredos | `/home/server/pulso-data/pulso.env`, modo 600, via `EnvironmentFile=` |
+| Harvest | diário às 04:30, dentro do processo |
+
+Nada está exposto na internet aberta: publicação em `pulso.cursar.space` exige
+a identidade de borda da F6. Detalhes e comandos de operação em
+[`docs/18-implementacao-f3.md`](docs/18-implementacao-f3.md).
 
 ## Rodando
 
