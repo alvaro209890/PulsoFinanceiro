@@ -131,7 +131,12 @@ Os 16 documentos de planejamento estão em [`docs/`](docs/) — começar por `01
 
 ## Pendências / a confirmar
 
-- Provisionar webhook `https://pulso-hooks.cursar.space/api/webhooks/pluggy` (modalidade por aplicação); hoje o harvest agendado é o único gatilho.
+- ~~Provisionar webhook~~ **✅ Provisionado (24/08)**: `POST /webhooks` na API da Pluggy (o dashboard não tem tela para isso), webhook id `57ce0a58-903a-47c0-aed2-f33a87c00b8d`, evento `all`, URL `https://pulso-hooks.cursar.space/api/webhooks/pluggy` + header `Authorization: Bearer` customizado. Túnel dedicado `pulso-hooks-cloudflared.service`. Entrega E2E validada (evento → inbox → SUCCEEDED). Update manual do Item retorna 403 nesta app — o gatilho real é o auto-sync da Pluggy.
 - Publicação humana depende da decisão de borda da F6 (Cloudflare Access ou proxy autenticador da tailnet); até lá o bind é só `127.0.0.1`.
 - Rotação das credenciais Pluggy foi **dispensada pelo titular** (ADR/registro em `docs/18-implementacao-f3.md`); a recomendação técnica continua valendo.
 - Referências a *Jujutsu Kaisen* na interface seguem a ADR-031: uso pessoal, não comercial, apenas texto — nenhum asset oficial no repositório.
+
+## Acesso
+
+- **Tailnet (atual):** `http://server-desktop:8080` — `tailscale serve` proxying `/` → `127.0.0.1:3040`, somente dentro da tailnet.
+- **Webhook público (só entrada da Pluggy):** `https://pulso-hooks.cursar.space/api/webhooks/pluggy` — protegido por Bearer; nenhum dado sai por esse caminho.
