@@ -866,8 +866,7 @@ async function loadRecurrences() {
 }
 
 // ------------------------- Análises (F4) -------------------------------------
-const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
-const moneyBRL = (n) => brl.format(n ?? 0);
+// `brl` e `money` já existem no topo do script — reutilizados aqui.
 
 async function loadAnalytics() {
   loadDuplicates();
@@ -914,7 +913,7 @@ async function loadMerchants() {
             <td>${i + 1}</td>
             <td>${m.displayName}</td>
             <td><span class="chip">${m.matcherType === 'MERCHANT_CNPJ' ? 'CNPJ' : 'descrição'}</span></td>
-            <td style="text-align:right;font-weight:600">${moneyBRL(m.total)}</td>
+            <td style="text-align:right;font-weight:600">${money(m.total)}</td>
             <td style="text-align:right">${m.count}</td>
           </tr>`).join('')}</tbody>
       </table>`;
@@ -938,8 +937,8 @@ async function loadPix() {
         <tbody>${result.data.counterparties.map((c) => `
           <tr>
             <td>${c.counterparty}</td>
-            <td style="text-align:right" class="${c.sent > 0 ? 'neg' : ''}">${moneyBRL(c.sent)}</td>
-            <td style="text-align:right" class="${c.received > 0 ? 'pos' : ''}">${moneyBRL(c.received)}</td>
+            <td style="text-align:right" class="${c.sent > 0 ? 'neg' : ''}">${money(c.sent)}</td>
+            <td style="text-align:right" class="${c.received > 0 ? 'pos' : ''}">${money(c.received)}</td>
           </tr>`).join('')}</tbody>
       </table>
       <div class="meta" style="margin-top:8px">contraparte derivada da descrição — nenhum CPF/documento é usado ou exibido</div>`;
@@ -952,7 +951,7 @@ async function loadSavings() {
   el('savings-list').innerHTML = '<div class="empty">carregando…</div>';
   try {
     const result = await getJson('/api/v1/analytics/savings?months=6');
-    el('sav-goal').textContent = moneyBRL(result.data.goalMonthly);
+    el('sav-goal').textContent = money(result.data.goalMonthly);
     el('sav-streak').textContent = String(result.data.streakMonths);
     el('sav-streak-lore').textContent = result.data.streakMonths > 0
       ? `${result.data.streakMonths} mês(es) consecutivo(s) na meta`
@@ -963,10 +962,10 @@ async function loadSavings() {
         <tbody>${result.data.months.slice().reverse().map((m) => `
           <tr>
             <td>${m.month}</td>
-            <td style="text-align:right">${m.variation === null ? '—' : moneyBRL(m.variation)}</td>
-            <td style="text-align:right">${moneyBRL((m.internalIn ?? 0) + (m.internalOut ?? 0))}</td>
+            <td style="text-align:right">${m.variation === null ? '—' : money(m.variation)}</td>
+            <td style="text-align:right">${money((m.internalIn ?? 0) + (m.internalOut ?? 0))}</td>
             <td style="text-align:right;font-weight:600" class="${(m.residualVariation ?? 0) >= 0 ? 'pos' : 'neg'}">
-              ${m.residualVariation === null ? '—' : moneyBRL(m.residualVariation)}
+              ${m.residualVariation === null ? '—' : money(m.residualVariation)}
             </td>
           </tr>`).join('')}</tbody>
       </table>`;
