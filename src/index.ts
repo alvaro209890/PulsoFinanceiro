@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { getConfig } from './config.js';
 import { openDb } from './db/index.js';
 import { registerRoutes } from './routes/api.js';
+import { registerAnalyticsRoutes } from './routes/analytics.js';
 import { registerStatic } from './static.js';
 import { PluggyClient } from './pluggy/client.js';
 import { startHarvestScheduler } from './jobs/scheduler.js';
@@ -17,6 +18,7 @@ export function buildServer(dbPath?: string) {
   const app = Fastify({ logger: true });
   const db = openDb(cfg.dbPath);
   registerRoutes(app, db);
+  registerAnalyticsRoutes(app, db);
   registerStatic(app);
 
   // F1: agendador do harvest diário (docs/06 §6) — só liga com item configurado

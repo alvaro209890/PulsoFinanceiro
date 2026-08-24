@@ -66,9 +66,28 @@ npx tsx tests/e2e-f2.ts --serve   # painel com banco sintético em 127.0.0.1:304
 | Rota | Descrição |
 |---|---|
 | `GET /api/health` | saúde + staleness do item (`STALE_POLICY_V1`) |
-| `GET /api/summary?period=YYYY-MM` | fechamento mensal simples (base F0) |
+| `GET /api/summary?period=YYYY-MM` | fechamento mensal determinístico |
 | `POST /api/sync/run` | dispara harvest manual (operacional) |
 | `POST /api/webhooks/pluggy` | entrada de webhook (Bearer); envelope válido → inbox, resposta rápida |
+
+### F4 — análises e correções dirigidas
+
+| Rota | Descrição |
+|---|---|
+| `GET /api/v1/analytics/merchants` | ranking por CNPJ com fallback de descrição (rankings separados) |
+| `GET /api/v1/analytics/pix` | PIX enviado/recebido por contraparte derivada da descrição — sem CPF/documento |
+| `GET /api/v1/analytics/duplicates` | possíveis duplicidades: mesmo valor, conta e janela **estritamente** < 24h; sempre dois IDs |
+| `GET /api/v1/analytics/anomalies` | detector `LOG_ZSCORE` dentro de categoria (amostra mín. 20, desvio zero não executa); não é z-score robusto |
+| `GET /api/v1/analytics/savings` | evolução da poupança com `variação_residual`, meta derivada do histórico (mediana) e streak; `estimatedYield` permanece `null` até a semântica da fonte ser confirmada |
+| `PUT /api/v1/transactions/:id/category-override` | única mutação de categoria; `If-Match` obrigatório (428 sem header, 412 revisão velha); idempotente |
+| `PUT /api/v1/transactions/:id/internal-transfer-override` | aceita `true`, `false` ou `null` (remove override); `If-Match` obrigatório |
+
+Toda escrita faz `bumpDataRevision` na mesma transação — invalida o ETag de todas as métricas dependentes. Apenas estas duas rotas de mutação existem no tráfego do frontend.
+
+### F2/F3 — núcleo determinístico, cartão e recorrências
+
+| Rota | Descrição |
+|---|---|
 | `GET /api/v1/dashboard/overview` | patrimônio observável, gasto, projeção, dia mais caro, heatmap, alertas |
 | `GET /api/v1/analytics/monthly-pace` | termômetro do mês, faixa histórica e composição da projeção |
 | `GET /api/v1/analytics/categories` | rollup por raiz com drill-down e comparação com o período anterior |

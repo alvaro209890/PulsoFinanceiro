@@ -395,3 +395,13 @@
 **Risco aceito e registrado:** o repositório de código é público, então a referência textual fica visível; o titular considera o risco irrelevante para uso pessoal não comercial. Isto não é aconselhamento jurídico.
 
 **Por quê:** respeita a decisão do dono do produto sem criar risco novo de distribuição de obra protegida.
+
+## ADR-030 — F4: analytics e as duas mutações autorizadas
+
+**Status:** aceita (24/08/2026, rodada Hermes-server).
+
+**Contexto:** docs/12 §8 exige merchants/PIX/anomalias/poupança e exatamente duas rotas de escrita, com gates de amostra e privacidade.
+
+**Decisão:** rankings de merchant são DOIS (CNPJ normalizado; descrição raw normalizada) — nunca mesclados. Contraparte PIX sai só da descrição sanitizada. Duplicidade exige mesmo valor+conta e janela estritamente <24h, sempre com dois IDs. LOG_ZSCORE roda por categoria com amostra mínima 20 e desvio > 0 (não é z-score robusto). Poupança usa variação_residual = variação_saldo − aportes + retiradas internas; `estimatedYield` fica `null` (gate). Overrides usam `If-Match` contra `data_revision` com 428/412 e `bumpDataRevision` na mesma transação da escrita — ETag das métricas dependentes invalida sozinho.
+
+**Notas:** descoberta de rodada — `date(?, '-1 day')` com parâmetro ligado retorna NULL no SQLite/better-sqlite3 desta stack; janelas SQL passam a ser calculadas na aplicação (`sqlWindow`). O ledger pré-existente usa o padrão antigo e merece migração futura.

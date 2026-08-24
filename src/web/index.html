@@ -129,6 +129,7 @@
     <button data-view="overview" aria-current="page">Visão geral</button>
     <button data-view="card">Cartão</button>
     <button data-view="recurrences">Recorrências</button>
+    <button data-view="analytics">Análises</button>
   </nav>
 
   <div id="alerts" class="grid" style="margin-bottom:12px"></div>
@@ -323,6 +324,54 @@
     </section>
   </div>
 
+  <!-- ================= ANÁLISES (F4) ================= -->
+  <div id="view-analytics" class="hidden">
+    <section class="grid cols-2" style="margin-bottom:12px">
+      <div class="card">
+        <div class="label">Possíveis duplicidades (&lt;24h)</div>
+        <div class="metric sm" id="dup-count">—</div>
+        <div class="meta">mesmo valor, conta e janela menor que 24 horas — dois IDs sempre</div>
+      </div>
+      <div class="card">
+        <div class="label">Anomalias detectadas</div>
+        <div class="metric sm" id="anom-count">—</div>
+        <div class="meta" id="anom-meta">detector LOG_ZSCORE por categoria (mín. 20 amostras)</div>
+      </div>
+    </section>
+
+    <section class="card" style="margin-bottom:12px">
+      <h2>Para onde foi o dinheiro <span class="lore">· Ranking de merchants</span></h2>
+      <div id="merchants-list"><div class="empty">carregando…</div></div>
+    </section>
+
+    <section class="card" style="margin-bottom:12px">
+      <h2>PIX por contraparte</h2>
+      <div id="pix-list"><div class="empty">carregando…</div></div>
+    </section>
+
+    <section class="card">
+      <h2>Poupança <span class="lore">· variação residual = saldo − fluxos internos</span></h2>
+      <div class="grid cols-3" style="margin-bottom:10px">
+        <div>
+          <div class="label">Meta mensal derivada</div>
+          <div class="metric sm" id="sav-goal">—</div>
+          <div class="meta">mediana do histórico, sem edição manual</div>
+        </div>
+        <div>
+          <div class="label">Streak de meses na meta</div>
+          <div class="metric sm" id="sav-streak">—</div>
+          <div class="meta" id="sav-streak-lore"></div>
+        </div>
+        <div>
+          <div class="label">Rendimento estimado</div>
+          <div class="metric sm">—</div>
+          <div class="meta">aguardando semântica da fonte (sempre nulo)</div>
+        </div>
+      </div>
+      <div id="savings-list"><div class="empty">carregando…</div></div>
+    </section>
+  </div>
+
   <div class="meta" id="footer-meta"></div>
 </div>
 
@@ -414,11 +463,12 @@ function setupNav() {
         if (other === button) other.setAttribute('aria-current', 'page');
         else other.removeAttribute('aria-current');
       }
-      for (const view of ['overview', 'card', 'recurrences']) {
+      for (const view of ['overview', 'card', 'recurrences', 'analytics']) {
         el(`view-${view}`).classList.toggle('hidden', view !== state.view);
       }
       if (state.view === 'card') loadCard();
       if (state.view === 'recurrences') loadRecurrences();
+      if (state.view === 'analytics') loadAnalytics();
     });
   }
 }
@@ -812,6 +862,116 @@ async function loadRecurrences() {
         }).join('');
   } catch (err) {
     el('rec-list').innerHTML = `<div class="empty">não foi possível carregar recorrências (${err.message})</div>`;
+  }
+}
+
+// ------------------------- Análises (F4) -------------------------------------
+const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const moneyBRL = (n) => brl.format(n ?? 0);
+
+async function loadAnalytics() {
+  loadDuplicates();
+  loadMerchants();
+  loadPix();
+  loadSavings();
+  // anomalias dependem de amostra; falha isolada não derruba a aba
+  try {
+    const result = await getJson('/api/v1/analytics/anomalies');
+    el('anom-count').textContent = String(result.counts.anomalies);
+    el('anom-meta').textContent =
+      `LOG_ZSCORE · ${result.counts.categoriesEvaluated} categoria(s) com amostra · limiar ${result.data.threshold}`;
+  } catch {
+    el('anom-count').textContent = '—';
+    el('anom-meta').textContent = 'histórico insuficiente (mínimo 20 transações por categoria)';
+  }
+}
+
+async function loadDuplicates() {
+  el('dup-count').textContent = '…';
+  try {
+    const { from, to } = state.period;
+    const result = await getJson(`/api/v1/analytics/duplicates?from=${from}&to=${to}`);
+    el('dup-count').textContent = String(result.counts.pairs);
+  } catch {
+    el('dup-count').textContent = '—';
+  }
+}
+
+async function loadMerchants() {
+  el('merchants-list').innerHTML = '<div class="empty">carregando…</div>';
+  try {
+    const { from, to } = state.period;
+    const result = await getJson(`/api/v1/analytics/merchants?from=${from}&to=${to}`);
+    if (result.data.ranking.length === 0) {
+      el('merchants-list').innerHTML = '<div class="empty">nenhum gasto confirmado no período</div>';
+      return;
+    }
+    el('merchants-list').innerHTML = `
+      <table>
+        <thead><tr><th>#</th><th>Merchant</th><th>Via</th><th style="text-align:right">Total</th><th style="text-align:right">Compras</th></tr></thead>
+        <tbody>${result.data.ranking.map((m, i) => `
+          <tr>
+            <td>${i + 1}</td>
+            <td>${m.displayName}</td>
+            <td><span class="chip">${m.matcherType === 'MERCHANT_CNPJ' ? 'CNPJ' : 'descrição'}</span></td>
+            <td style="text-align:right;font-weight:600">${moneyBRL(m.total)}</td>
+            <td style="text-align:right">${m.count}</td>
+          </tr>`).join('')}</tbody>
+      </table>`;
+  } catch (err) {
+    el('merchants-list').innerHTML = `<div class="empty">falha ao carregar (${err.message})</div>`;
+  }
+}
+
+async function loadPix() {
+  el('pix-list').innerHTML = '<div class="empty">carregando…</div>';
+  try {
+    const { from, to } = state.period;
+    const result = await getJson(`/api/v1/analytics/pix?from=${from}&to=${to}`);
+    if (result.data.counterparties.length === 0) {
+      el('pix-list').innerHTML = '<div class="empty">sem PIX no período</div>';
+      return;
+    }
+    el('pix-list').innerHTML = `
+      <table>
+        <thead><tr><th>Contraparte</th><th style="text-align:right">Enviado</th><th style="text-align:right">Recebido</th></tr></thead>
+        <tbody>${result.data.counterparties.map((c) => `
+          <tr>
+            <td>${c.counterparty}</td>
+            <td style="text-align:right" class="${c.sent > 0 ? 'neg' : ''}">${moneyBRL(c.sent)}</td>
+            <td style="text-align:right" class="${c.received > 0 ? 'pos' : ''}">${moneyBRL(c.received)}</td>
+          </tr>`).join('')}</tbody>
+      </table>
+      <div class="meta" style="margin-top:8px">contraparte derivada da descrição — nenhum CPF/documento é usado ou exibido</div>`;
+  } catch (err) {
+    el('pix-list').innerHTML = `<div class="empty">falha ao carregar (${err.message})</div>`;
+  }
+}
+
+async function loadSavings() {
+  el('savings-list').innerHTML = '<div class="empty">carregando…</div>';
+  try {
+    const result = await getJson('/api/v1/analytics/savings?months=6');
+    el('sav-goal').textContent = moneyBRL(result.data.goalMonthly);
+    el('sav-streak').textContent = String(result.data.streakMonths);
+    el('sav-streak-lore').textContent = result.data.streakMonths > 0
+      ? `${result.data.streakMonths} mês(es) consecutivo(s) na meta`
+      : 'nenhum mês na meta ainda';
+    el('savings-list').innerHTML = `
+      <table>
+        <thead><tr><th>Mês</th><th style="text-align:right">Variação</th><th style="text-align:right">Fluxos internos</th><th style="text-align:right">Residual</th></tr></thead>
+        <tbody>${result.data.months.slice().reverse().map((m) => `
+          <tr>
+            <td>${m.month}</td>
+            <td style="text-align:right">${m.variation === null ? '—' : moneyBRL(m.variation)}</td>
+            <td style="text-align:right">${moneyBRL((m.internalIn ?? 0) + (m.internalOut ?? 0))}</td>
+            <td style="text-align:right;font-weight:600" class="${(m.residualVariation ?? 0) >= 0 ? 'pos' : 'neg'}">
+              ${m.residualVariation === null ? '—' : moneyBRL(m.residualVariation)}
+            </td>
+          </tr>`).join('')}</tbody>
+      </table>`;
+  } catch (err) {
+    el('savings-list').innerHTML = `<div class="empty">falha ao carregar (${err.message})</div>`;
   }
 }
 
