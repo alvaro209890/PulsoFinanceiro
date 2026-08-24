@@ -405,3 +405,13 @@
 **Decisão:** rankings de merchant são DOIS (CNPJ normalizado; descrição raw normalizada) — nunca mesclados. Contraparte PIX sai só da descrição sanitizada. Duplicidade exige mesmo valor+conta e janela estritamente <24h, sempre com dois IDs. LOG_ZSCORE roda por categoria com amostra mínima 20 e desvio > 0 (não é z-score robusto). Poupança usa variação_residual = variação_saldo − aportes + retiradas internas; `estimatedYield` fica `null` (gate). Overrides usam `If-Match` contra `data_revision` com 428/412 e `bumpDataRevision` na mesma transação da escrita — ETag das métricas dependentes invalida sozinho.
 
 **Notas:** descoberta de rodada — `date(?, '-1 day')` com parâmetro ligado retorna NULL no SQLite/better-sqlite3 desta stack; janelas SQL passam a ser calculadas na aplicação (`sqlWindow`). O ledger pré-existente usa o padrão antigo e merece migração futura.
+
+## ADR-032 — Publicação antecipada em pulso.cursar.space SEM Access (parcial F6)
+
+**Status:** aceita com ressalva (24/08/2026, decisão do titular "deixar já pronto no link público").
+
+**Decisão:** túnel dedicado `pulso-app` (6f41e520) roteia `pulso.cursar.space` → 127.0.0.1:3040, mesmo origin do painel. O webhook continua no host dedicado `pulso-hooks`. O painel humano está ABERTO na internet até o Cloudflare Access ser ativado — desvio temporário do ramo A de docs/12 §F6, que exige Access + JWT no origin.
+
+**Mitigações atuais:** nenhuma escrita além dos dois overrides (ambos exigem If-Match); webhook isolado por hostname; dados exibidos são agregados sem documento/CPF.
+
+**Pendência registrada:** ativar Access na borda e validar JWT no origin antes de qualquer divulgação do link.

@@ -155,7 +155,15 @@ Os 16 documentos de planejamento estão em [`docs/`](docs/) — começar por `01
 - Rotação das credenciais Pluggy foi **dispensada pelo titular** (ADR/registro em `docs/18-implementacao-f3.md`); a recomendação técnica continua valendo.
 - Referências a *Jujutsu Kaisen* na interface seguem a ADR-031: uso pessoal, não comercial, apenas texto — nenhum asset oficial no repositório.
 
-## Acesso
+### Acesso
 
-- **Tailnet (atual):** `http://server-desktop:8080` — `tailscale serve` proxying `/` → `127.0.0.1:3040`, somente dentro da tailnet.
+| Ambiente | URL | Nota |
+|---|---|---|
+| **Público** | **https://pulso.cursar.space** | túnel dedicado `pulso-app` (24/08); **sem Cloudflare Access ainda** — proteção de borda pendente de decisão |
+| Webhook Pluggy | https://pulso-hooks.cursar.space/api/webhooks/pluggy | túnel `pulso-hooks`, Bearer obrigatório |
+| Tailnet | http://server-desktop.tail7f6fa9.ts.net:8080 | alternativa interna |
+
+> ⚠️ O hostname humano está aberto na internet enquanto o Access não é ativado na borda
+> (recomendação dos docs/12 §F6: Cloudflare Access com um único e-mail + JWT revalidado no origin).
+
 - **Webhook público (só entrada da Pluggy):** `https://pulso-hooks.cursar.space/api/webhooks/pluggy` — protegido por Bearer; nenhum dado sai por esse caminho.
