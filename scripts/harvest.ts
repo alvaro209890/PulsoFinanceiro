@@ -21,27 +21,6 @@ async function main(): Promise<void> {
   const db = openDb(cfg.dbPath);
   const client = new PluggyClient(cfg.pluggyClientId, cfg.pluggyClientSecret);
 
-  // Taxonomia antes das transações (docs/05 §categories).
-  const categories = await client.getCategories();
-  const upsert = db.prepare(
-    `INSERT INTO categories (id, description, description_translated, parent_id, level1_prefix)
-     VALUES (?,?,?,?,?)
-     ON CONFLICT(id) DO UPDATE SET description=excluded.description,
-       description_translated=excluded.description_translated,
-       parent_id=excluded.parent_id, level1_prefix=excluded.level1_prefix,
-       synced_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')`
-  );
-  const runCategories = db.transaction(() => {
-    // Pais primeiro: a FK de parent_id aponta para a própria tabela.
-    for (const c of categories.filter((c) => !c.parentId)) {
-      upsert.run(c.id, c.description, c.descriptionTranslated, null, c.id.slice(0, 2));
-    }
-    for (const c of categories.filter((c) => c.parentId)) {
-      upsert.run(c.id, c.description, c.descriptionTranslated, c.parentId, c.id.slice(0, 2));
-    }
-  });
-  runCategories();
-
   const started = Date.now();
   const result = await syncItem(db, client, cfg.pluggyItemId, 'daily');
   const seconds = ((Date.now() - started) / 1000).toFixed(1);
@@ -51,6 +30,7 @@ async function main(): Promise<void> {
   console.log(`  páginas: ${result.pagesFetched} | transações upsertadas: ${result.txsUpserted}`);
   console.log(`  faturas: ${result.billsUpserted} | matches de pagamento: ${result.billMatches}`);
   console.log(`  recorrências persistidas: ${result.recurrences}`);
+  console.log(`  categorias sincronizadas: ${result.categoriesSynced} | drift de categoria: ${result.categoryDrift}`);
   console.log('--- estado local (contagens) ---');
   console.log(`  categorias: ${count('SELECT COUNT(*) AS n FROM categories')}`);
   console.log(`  contas: ${count('SELECT COUNT(*) AS n FROM accounts')}`);

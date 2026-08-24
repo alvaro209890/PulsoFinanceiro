@@ -14,6 +14,13 @@ import { upsertBills } from '../db/bills.js';
 import { matchBillPayments } from '../db/billMatch.js';
 import { analyzeRecurrences } from '../finance/recurrences.js';
 import { normalizeCnpj, normalizeDescription } from '../finance/normalize.js';
+import {
+  ensureCategoriesFor,
+  newCategoryState,
+  resolveCategory,
+  syncCategories,
+  type CategorySyncState,
+} from './categories.js';
 import { captureDailySnapshots } from '../db/snapshots.js';
 import { evaluatePaceEvent, evaluateCardAndRecurrenceEvents } from '../finance/events.js';
 import { bumpDataRevision } from '../finance/envelope.js';
@@ -26,6 +33,9 @@ export interface SyncResult {
   billsUpserted: number;
   billMatches: number;
   recurrences: number;
+  categoriesSynced: number;
+  /** Transações que citaram categoria fora do catálogo. */
+  categoryDrift: number;
   ok: boolean;
   errorCode?: string;
 }
@@ -46,7 +56,12 @@ export async function syncItem(
     // 1. Estado do item (GET /items/{id} é a primeira operação — docs/04 §4)
     await client.getItem(itemId);
 
-    // 2. Contas → upsert
+    // 2. Taxonomia ANTES das transações: `transactions.category_id` tem FK
+    //    para `categories` e um catálogo vazio derruba o ciclo inteiro.
+    const categoriesSynced = await syncCategories(db, client);
+    const categoryState = newCategoryState(db);
+
+    // 3. Contas → upsert
     const accounts = await client.getAccounts(itemId);
     const accountIds: Array<{ external: string; public: string; type: string }> = [];
     for (const a of accounts) {
@@ -78,7 +93,7 @@ export async function syncItem(
       accountIds.push({ external: a.id, public: publicId, type: a.type });
     }
 
-    // 3. Transações conta por conta, cursor até esgotar
+    // 4. Transações conta por conta, cursor até esgotar
     let pagesFetched = 0;
     let txsUpserted = 0;
     for (const acc of accountIds) {
@@ -88,15 +103,17 @@ export async function syncItem(
         if (pagesFetched > MAX_PAGES_HARD_LIMIT) {
           throw new Error(`CURSOR_LOOP: excedido ${MAX_PAGES_HARD_LIMIT} páginas`);
         }
+        // Categoria nova da Pluggy ressincroniza o catálogo uma vez por ciclo.
+        await ensureCategoriesFor(db, client, page.results, categoryState);
         for (const raw of page.results) {
-          txsUpserted += applyTransaction(db, acc.public, raw);
+          txsUpserted += applyTransaction(db, acc.public, raw, categoryState);
         }
         if (!page.next) break;
         page = await client.nextTransactionPage(page.next);
       }
     }
 
-    // 4. Faturas do cartão (F3): a fatura é a fonte da obrigação aberta e do
+    // 5. Faturas do cartão (F3): a fatura é a fonte da obrigação aberta e do
     //    pareamento de pagamento; sem ela o snapshot cairia no fallback.
     let billsUpserted = 0;
     for (const acc of accountIds) {
@@ -125,7 +142,10 @@ export async function syncItem(
     });
     closeRun();
 
-    return { runId, kind, pagesFetched, txsUpserted, billsUpserted, billMatches, recurrences, ok: true };
+    return {
+      runId, kind, pagesFetched, txsUpserted, billsUpserted, billMatches, recurrences,
+      categoriesSynced, categoryDrift: categoryState.drift, ok: true,
+    };
   } catch (err) {
     const code = err instanceof Error ? err.message.slice(0, 60) : 'UNKNOWN';
     db.prepare(
@@ -133,12 +153,17 @@ export async function syncItem(
     ).run(code, runId);
     return {
       runId, kind, pagesFetched: 0, txsUpserted: 0, billsUpserted: 0, billMatches: 0,
-      recurrences: 0, ok: false, errorCode: code,
+      recurrences: 0, categoriesSynced: 0, categoryDrift: 0, ok: false, errorCode: code,
     };
   }
 }
 
-function applyTransaction(db: Db, accountPublicId: string, raw: unknown): number {
+function applyTransaction(
+  db: Db,
+  accountPublicId: string,
+  raw: unknown,
+  categoryState: CategorySyncState
+): number {
   const t = raw as Record<string, unknown>;
   const externalId = typeof t['id'] === 'string' ? t['id'] : null;
   const amount = typeof t['amount'] === 'number' ? t['amount'] : null;
@@ -159,7 +184,7 @@ function applyTransaction(db: Db, accountPublicId: string, raw: unknown): number
     type: t['type'] === 'DEBIT' || t['type'] === 'CREDIT' ? t['type'] : null,
     operationType: strOrNull(t['operationType']),
     description: strOrNull(t['description']),
-    categoryId: strOrNull(t['categoryId']),
+    categoryId: resolveCategory(strOrNull(t['categoryId']), categoryState),
     balanceAfter: typeof t['balance'] === 'number' ? t['balance'] : null,
     orderTiebreak: typeof t['order'] === 'number' ? t['order'] : null,
     rawJsonSanitized: JSON.stringify(sanitizeDeep(t)),

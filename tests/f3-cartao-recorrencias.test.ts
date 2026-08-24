@@ -37,6 +37,7 @@ import { evaluateCardAndRecurrenceEvents } from '../src/finance/events.js';
 import { normalizeDescription, normalizeCnpj } from '../src/finance/normalize.js';
 import { sanitizeDeep } from '../src/pluggy/sanitize.js';
 import { listTransactions } from '../src/finance/transactions.js';
+import { resolveCategory } from '../src/jobs/categories.js';
 
 const NOW = new Date('2026-03-15T15:00:00.000Z'); // 2026-03-15 em São Paulo
 
@@ -630,5 +631,23 @@ describe('estado das séries', () => {
       categoryId: '03000000',
     });
     expect(analyzeRecurrences(db, { now: NOW }).seriesPersisted).toBe(0);
+  });
+});
+
+describe('taxonomia de categorias', () => {
+  it('categoria fora do catálogo vira NULL e conta drift, sem quebrar a FK', () => {
+    const db = makeDb();
+    const state = { known: new Set(['08000000']), refreshed: true, drift: 0 };
+    expect(resolveCategory('08000000', state)).toBe('08000000');
+    expect(resolveCategory('99999999', state)).toBeNull();
+    expect(resolveCategory(null, state)).toBeNull();
+    expect(state.drift).toBe(1);
+
+    // A transação com categoria desconhecida precisa entrar mesmo assim.
+    const id = addTx(db, { date: '2026-03-02', amount: 10, categoryId: null });
+    const row = db.prepare('SELECT category_id FROM transactions WHERE public_id = ?').get(id) as {
+      category_id: string | null;
+    };
+    expect(row.category_id).toBeNull();
   });
 });
