@@ -1,0 +1,65 @@
+# Segredos e configuração local
+.env*
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials/
+
+# SQLite, bancos e sidecars WAL/SHM
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.db
+*.db3
+*.db-*
+*.wal
+*.shm
+
+# Backups, dumps, dados e exportações
+*.bak
+*.backup
+*.dump
+*.dump.sql
+*.sql.gz
+*.csv
+*.tsv
+*.ofx
+*.qif
+*.xlsx
+*.parquet
+backups/
+data/
+dumps/
+exports/
+fixtures-private/
+samples-private/
+
+# Payloads e logs que podem conter dados financeiros
+*.log
+*.jsonl
+logs/
+diagnostics/
+webhook-payloads/
+
+# Dependências, builds e testes
+node_modules/
+dist/
+coverage/
+.cache/
+.turbo/
+.vite/
+
+# Editores e sistema operacional
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Temporários
+*.tmp
+*.temp
+*.swp
+*~
