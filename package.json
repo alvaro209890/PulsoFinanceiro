@@ -1,0 +1,44 @@
+{
+  "name": "pulsefinanceiro",
+  "version": "1.0.0",
+  "description": "Painel financeiro pessoal, automático e self-hosted para transformar os dados já sincronizados pela Pluggy em visão consolidada, alertas e explicações acionáveis. O produto tem um único usuário, não possui cadastro nem autenticação própria e não recebe lançamentos manuais.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json && vite build",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alvaro209890/PulsoFinanceiro.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/alvaro209890/PulsoFinanceiro/issues"
+  },
+  "homepage": "https://github.com/alvaro209890/PulsoFinanceiro#readme",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.1.2",
+    "better-sqlite3": "^13.0.3",
+    "fastify": "^5.12.1",
+    "ulid": "^3.0.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.2.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}
