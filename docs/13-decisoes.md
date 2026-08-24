@@ -369,3 +369,29 @@
 **Alternativas descartadas:** cron externo/systemd timer na F1 (move ops para fora do app antes do deploy decidido); processar webhook dentro do request (violaria resposta em <5s); HMAC próprio (docs/04: não inventar assinatura).
 
 **Por quê:** mantém o processo único self-hosted, cumpre os invariantes dos docs e simplifica o primeiro deploy.
+
+## ADR-030 — F2/F3 implementadas com razão elegível único e métricas em centavos
+
+**Status:** aceita (24/08/2026).
+
+**Contexto:** overview, ritmo, categorias, cartão e recorrências precisam devolver exatamente os mesmos números, e o schema da F0 guarda `transactions.amount` como `REAL`.
+
+**Decisão:** existe uma única função de classificação (`src/finance/ledger.ts`) que decide o que é gasto elegível; todos os contratos leem dela. Toda soma monetária acontece em centavos inteiros — a conversão ocorre na leitura, e as tabelas novas guardam `*_minor`. Regras que o plano deixava em aberto foram fixadas e declaradas: dispersão da projeção, faixas de confiança, cobertura do dia, janela comparável anterior, histerese dos eventos e limiares de recorrência. `eligibility=SPEND` foi acrescentado a `GET /api/v1/transactions` para a composição fechar com o card.
+
+**Alternativas descartadas:** recalcular gasto em cada endpoint (divergência garantida); somar em ponto flutuante; migrar o schema inteiro para inteiros antes de ter dado real.
+
+**Por quê:** dois números diferentes para a mesma pergunta destroem a confiança no painel inteiro; centavos inteiros eliminam a classe de erro de arredondamento.
+
+## ADR-031 — Referências a Jujutsu Kaisen são explícitas no uso pessoal
+
+**Status:** aceita (24/08/2026, decisão do titular). **Substitui o gate de release da ADR-024 para este contexto.**
+
+**Contexto:** a ADR-024 exigia mascotes originais enquanto não houvesse licença. O titular decidiu que o PulsoFinanceiro é uso pessoal, não comercial, single-user e self-hosted, e pediu as referências fiéis ao anime.
+
+**Decisão:** a interface nomeia as referências (Six Eyes/Infinity de Gojo na leitura de camadas, Kashimo na descarga do ritmo, Hakari no padrão que se repete) como **texto secundário** ao lado da métrica. Nada muda na mecânica: número primeiro, arquétipo depois.
+
+**Limites que continuam valendo:** nenhum asset oficial — arte, logo, tipografia, trilha, screenshot de episódio ou fan art de terceiro — entra no repositório ou na interface; a referência é textual. O produto não é distribuído, vendido, anunciado nem oferecido a terceiros. Se um dia houver release pública, comercialização ou distribuição, a ADR-024 volta a valer integralmente e os nomes saem antes.
+
+**Risco aceito e registrado:** o repositório de código é público, então a referência textual fica visível; o titular considera o risco irrelevante para uso pessoal não comercial. Isto não é aconselhamento jurídico.
+
+**Por quê:** respeita a decisão do dono do produto sem criar risco novo de distribuição de obra protegida.

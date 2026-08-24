@@ -3,6 +3,8 @@
  * Publicação só ocorre após decisão de borda (Cloudflare Access, ADR-016/017).
  */
 import Fastify from 'fastify';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { getConfig } from './config.js';
 import { openDb } from './db/index.js';
 import { registerRoutes } from './routes/api.js';
@@ -35,7 +37,13 @@ export function buildServer(dbPath?: string) {
   };
 }
 
-const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop() ?? '');
+/**
+ * "Fui executado direto?" comparando caminhos REAIS. A versão anterior fazia
+ * `argv[1].split('/')`, que no Windows não separa nada (o caminho usa `\`):
+ * o processo subia, não escutava porta nenhuma e saía com código 0.
+ */
+const entry = process.argv[1] ? resolve(process.argv[1]) : null;
+const isMain = entry !== null && resolve(fileURLToPath(import.meta.url)) === entry;
 if (isMain) {
   const cfg = getConfig();
   const { app } = buildServer(cfg.dbPath);

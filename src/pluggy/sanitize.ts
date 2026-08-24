@@ -8,19 +8,26 @@
  */
 
 const DENY_KEYS = new Set<string>([
-  'number',
   'owner',
-  'taxnumber',
-  'documentnumber',
   'cpfcnpj',
   'cpf',
-  'cnpj_value', // merchant.cnpj pode ficar; documento puro não — ver abaixo
+  'identity',
 ]);
 
-/** Substrings que denunciam chave sensível ondequer que apareçam. */
+/**
+ * Substrings que denunciam chave sensível ondequer que apareçam.
+ *
+ * `number` é substring proposital e fail-closed: cobre `number`,
+ * `cardNumber`, `identificationNumber`, `documentNumber`, `taxNumber`,
+ * `transferNumber` (agência/conta) e `referenceNumber` de uma vez — nenhum
+ * campo necessário ao produto carrega essa palavra. Ver docs/05 §9, que
+ * exige canário removido em cada uma dessas chaves.
+ */
 const DENY_SUBSTRINGS = [
+  'number',
   'document',
   'taxid',
+  'identification',
   'fingerprint', // SOURCE_FINGERPRINT_V1 nunca sai do derivador local
 ];
 

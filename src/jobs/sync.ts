@@ -9,9 +9,13 @@ import type { Db } from '../db/index.js';
 import { ulid } from 'ulid';
 import type { PluggyClient, PluggyTransactionPage } from '../pluggy/client.js';
 import { sanitizeDeep } from '../pluggy/sanitize.js';
-import { upsertAccount, upsertTransaction } from '../db/upserts.js';
+import { upsertAccount, upsertTransaction, replaceCreditLimits } from '../db/upserts.js';
+import { upsertBills } from '../db/bills.js';
+import { matchBillPayments } from '../db/billMatch.js';
+import { analyzeRecurrences } from '../finance/recurrences.js';
+import { normalizeCnpj, normalizeDescription } from '../finance/normalize.js';
 import { captureDailySnapshots } from '../db/snapshots.js';
-import { evaluatePaceEvent } from '../finance/events.js';
+import { evaluatePaceEvent, evaluateCardAndRecurrenceEvents } from '../finance/events.js';
 import { bumpDataRevision } from '../finance/envelope.js';
 
 export interface SyncResult {
@@ -19,6 +23,9 @@ export interface SyncResult {
   kind: 'daily' | 'full';
   pagesFetched: number;
   txsUpserted: number;
+  billsUpserted: number;
+  billMatches: number;
+  recurrences: number;
   ok: boolean;
   errorCode?: string;
 }
@@ -41,7 +48,7 @@ export async function syncItem(
 
     // 2. Contas → upsert
     const accounts = await client.getAccounts(itemId);
-    const accountIds: Array<{ external: string; public: string }> = [];
+    const accountIds: Array<{ external: string; public: string; type: string }> = [];
     for (const a of accounts) {
       const publicId = upsertAccount(db, {
         externalId: a.id,
@@ -51,8 +58,24 @@ export async function syncItem(
         label: deriveLabel(a),
         balance: a.balance,
         currency: a.currencyCode,
+        closingBalance: a.bankData?.closingBalance ?? null,
+        credit: a.creditData
+          ? {
+              level: a.creditData.level,
+              brand: a.creditData.brand,
+              creditLimit: a.creditData.creditLimit,
+              availableCreditLimit: a.creditData.availableCreditLimit,
+              balanceDueDate: a.creditData.balanceDueDate,
+              balanceCloseDate: a.creditData.balanceCloseDate,
+              minimumPayment: a.creditData.minimumPayment,
+              status: a.creditData.status,
+            }
+          : null,
       });
-      accountIds.push({ external: a.id, public: publicId });
+      if (a.creditData) {
+        replaceCreditLimits(db, publicId, a.creditData.disaggregatedCreditLimits);
+      }
+      accountIds.push({ external: a.id, public: publicId, type: a.type });
     }
 
     // 3. Transações conta por conta, cursor até esgotar
@@ -73,27 +96,45 @@ export async function syncItem(
       }
     }
 
+    // 4. Faturas do cartão (F3): a fatura é a fonte da obrigação aberta e do
+    //    pareamento de pagamento; sem ela o snapshot cairia no fallback.
+    let billsUpserted = 0;
+    for (const acc of accountIds) {
+      if (acc.type !== 'CREDIT') continue;
+      const bills = await client.getBills(acc.external);
+      billsUpserted += upsertBills(db, acc.public, bills).bills;
+    }
+
     db.prepare(
       `UPDATE sync_runs SET finished_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'), ok=1,
        pages_fetched=?, txs_upserted=? WHERE id=?`
     ).run(pagesFetched, txsUpserted, runId);
 
-    // F2: fotografia do dia, avaliação determinística do ritmo e revisão de
-    // dados no MESMO commit que confirma a métrica (docs/09 §4.1, docs/12 F2).
+    // Fechamento do harvest no MESMO commit que confirma as métricas
+    // (docs/09 §4.1, docs/12 F2/F3): pareamento de pagamento de fatura,
+    // recorrências, fotografia do dia, eventos determinísticos e revisão.
+    let billMatches = 0;
+    let recurrences = 0;
     const closeRun = db.transaction(() => {
+      billMatches = matchBillPayments(db).matched;
+      recurrences = analyzeRecurrences(db).seriesPersisted;
       captureDailySnapshots(db, { syncRunId: runId });
       evaluatePaceEvent(db);
+      evaluateCardAndRecurrenceEvents(db);
       bumpDataRevision(db);
     });
     closeRun();
 
-    return { runId, kind, pagesFetched, txsUpserted, ok: true };
+    return { runId, kind, pagesFetched, txsUpserted, billsUpserted, billMatches, recurrences, ok: true };
   } catch (err) {
     const code = err instanceof Error ? err.message.slice(0, 60) : 'UNKNOWN';
     db.prepare(
       `UPDATE sync_runs SET finished_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'), ok=0, error_code=? WHERE id=?`
     ).run(code, runId);
-    return { runId, kind, pagesFetched: 0, txsUpserted: 0, ok: false, errorCode: code };
+    return {
+      runId, kind, pagesFetched: 0, txsUpserted: 0, billsUpserted: 0, billMatches: 0,
+      recurrences: 0, ok: false, errorCode: code,
+    };
   }
 }
 
@@ -106,6 +147,8 @@ function applyTransaction(db: Db, accountPublicId: string, raw: unknown): number
   if (!externalId || amount === null || !date || (statusRaw !== 'POSTED' && statusRaw !== 'PENDING')) {
     return 0; // registro fora do contrato é ignorado e contabilizado como não aplicado
   }
+  const merchant = t['merchant'] as Record<string, unknown> | null | undefined;
+  const cardMeta = t['creditCardMetadata'] as Record<string, unknown> | null | undefined;
   const { inserted } = upsertTransaction(db, {
     externalId,
     accountPublicId,
@@ -120,6 +163,15 @@ function applyTransaction(db: Db, accountPublicId: string, raw: unknown): number
     balanceAfter: typeof t['balance'] === 'number' ? t['balance'] : null,
     orderTiebreak: typeof t['order'] === 'number' ? t['order'] : null,
     rawJsonSanitized: JSON.stringify(sanitizeDeep(t)),
+    // `creditCardMetadata.cardNumber` existe no payload e não é lido aqui:
+    // número de cartão nunca é persistido (docs/09 §5.2).
+    billForecastDate: strOrNull(cardMeta?.['billForecastDate']),
+    payeeMcc: typeof cardMeta?.['payeeMCC'] === 'number' ? (cardMeta['payeeMCC'] as number) : null,
+    merchantCnpj: normalizeCnpj(merchant?.['cnpj']),
+    merchantBusinessName: strOrNull(merchant?.['businessName']),
+    descriptionRawNormalized: normalizeDescription(
+      strOrNull(t['descriptionRaw']) ?? strOrNull(t['description'])
+    ),
   });
   return inserted ? 1 : 1; // conta ambos: upsertado = inserido ou atualizado
 }

@@ -8,10 +8,11 @@
   },
   "scripts": {
     "test": "vitest run",
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.json && vite build",
-    "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit"
+    "dev": "tsx watch --env-file=.env src/index.ts",
+    "build": "tsc -p tsconfig.json && node -e \"require('node:fs').cpSync('src/web','dist/src/web',{recursive:true})\"",
+    "start": "node --env-file=.env dist/src/index.js",
+    "typecheck": "tsc --noEmit",
+    "harvest": "tsx --env-file=.env scripts/harvest.ts"
   },
   "repository": {
     "type": "git",

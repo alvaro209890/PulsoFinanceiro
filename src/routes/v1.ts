@@ -37,6 +37,19 @@ import {
   TRANSACTIONS_DEFAULT_LIMIT,
   TRANSACTIONS_MAX_LIMIT,
 } from '../finance/transactions.js';
+import {
+  BILLS_METRIC_VERSION,
+  CardAccountNotFound,
+  computeCreditCard,
+  CREDIT_CARD_METRIC_VERSION,
+  listBills,
+} from '../finance/creditCard.js';
+import {
+  listRecurrences,
+  RECURRENCES_METRIC_VERSION,
+  type RecurrenceStatus,
+} from '../finance/recurrences.js';
+import { addDays } from '../finance/time.js';
 
 const MAX_RANGE_DAYS = 366;
 
@@ -115,6 +128,110 @@ export function registerV1Routes(app: FastifyInstance, db: Db): void {
     } catch (err) {
       return fail(reply, req, err);
     }
+  });
+
+  app.get<{ Querystring: { billMonth?: string; timezone?: string } }>(
+    '/api/v1/credit-card',
+    async (req, reply) => {
+      try {
+        const timezone = parseTimezone(req.query.timezone);
+        const billMonth = req.query.billMonth;
+        if (billMonth !== undefined && !isMonth(billMonth)) {
+          throw new ValidationError([{ field: 'billMonth', reason: 'Formato esperado: YYYY-MM' }]);
+        }
+        const result = computeCreditCard(db, { billMonth, timezone });
+        return send(db, reply, req, {
+          metricVersion: CREDIT_CARD_METRIC_VERSION,
+          filters: `${billMonth ?? 'current'}:${timezone}`,
+          result,
+        });
+      } catch (err) {
+        return fail(reply, req, err);
+      }
+    }
+  );
+
+  app.get<{ Querystring: { accountId?: string; from?: string; to?: string; timezone?: string } }>(
+    '/api/v1/bills',
+    async (req, reply) => {
+      try {
+        const timezone = parseTimezone(req.query.timezone);
+        const accountId = req.query.accountId;
+        if (!accountId) {
+          throw new ValidationError([{ field: 'accountId', reason: 'Obrigatório' }]);
+        }
+        // Padrão: últimos 12 meses de vencimento, `to` exclusivo.
+        const defaultTo = addDays(todayCivil(timezone), 1);
+        const defaultFrom = addDays(defaultTo, -366);
+        const window = parseWindow(req.query.from ?? defaultFrom, req.query.to ?? defaultTo, timezone);
+        const result = listBills(db, { accountId, ...window, timezone });
+        return send(db, reply, req, {
+          metricVersion: BILLS_METRIC_VERSION,
+          filters: `${accountId}:${window.from}:${window.to}:${timezone}`,
+          result: { ...result, data: result.data as unknown },
+        });
+      } catch (err) {
+        return fail(reply, req, err);
+      }
+    }
+  );
+
+  app.get<{ Querystring: { status?: string; limit?: string; timezone?: string } }>(
+    '/api/v1/analytics/recurrences',
+    async (req, reply) => {
+      try {
+        const timezone = parseTimezone(req.query.timezone);
+        const status =
+          parseEnum(req.query.status, ['ACTIVE', 'DORMANT', 'RESUMED', 'ALL'] as const, 'status') ?? 'ALL';
+        const limit = parseLimit(req.query.limit);
+        const result = listRecurrences(db, {
+          status: status as RecurrenceStatus | 'ALL',
+          limit,
+          timezone,
+        });
+        return send(db, reply, req, {
+          metricVersion: RECURRENCES_METRIC_VERSION,
+          filters: `${status}:${limit}:${timezone}`,
+          result,
+        });
+      } catch (err) {
+        return fail(reply, req, err);
+      }
+    }
+  );
+
+  // Contas em DTO local: sem número, titular, documento ou ID externo.
+  app.get('/api/v1/accounts', async (_req, reply) => {
+    const rows = db
+      .prepare(
+        `SELECT a.public_id, a.type, a.subtype, a.label, a.currency, a.balance, a.closing_balance,
+                (SELECT captured_at FROM balance_snapshots s
+                  WHERE s.account_public_id = a.public_id
+                  ORDER BY s.snapshot_date DESC LIMIT 1) AS captured_at
+           FROM accounts a ORDER BY a.label ASC, a.public_id ASC`
+      )
+      .all() as Array<{
+        public_id: string;
+        type: string;
+        subtype: string | null;
+        label: string;
+        currency: string;
+        balance: number | null;
+        closing_balance: number | null;
+        captured_at: string | null;
+      }>;
+    reply.header('Cache-Control', 'private, no-store');
+    return {
+      schemaVersion: '1.0',
+      data: rows.map((r) => ({
+        id: r.public_id,
+        type: r.type,
+        subtype: r.subtype,
+        displayName: r.label,
+        currencyCode: r.currency,
+        snapshot: { capturedAt: r.captured_at, balance: r.closing_balance ?? r.balance },
+      })),
+    };
   });
 
   app.get<{
@@ -219,6 +336,11 @@ function fail(reply: FastifyReply, req: FastifyRequest, err: unknown) {
     return reply
       .code(409)
       .send(errorBody('CURSOR_SNAPSHOT_EXPIRED', 'Cursor não pertence a uma visão válida.', req));
+  }
+  if (err instanceof CardAccountNotFound) {
+    return reply
+      .code(404)
+      .send(errorBody('RESOURCE_NOT_FOUND', 'Conta de crédito local inexistente.', req));
   }
   throw err;
 }

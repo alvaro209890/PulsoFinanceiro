@@ -2,7 +2,7 @@
 
 Painel financeiro pessoal, automático e self-hosted para transformar os dados já sincronizados pela Pluggy em visão consolidada, alertas e explicações acionáveis. O produto tem um único usuário, não possui cadastro nem autenticação própria e não recebe lançamentos manuais.
 
-> Estado: **F0 + F1 + F2 implementadas** — Fastify + SQLite + cliente Pluggy + webhook inbox + staleness + outbox + núcleo financeiro determinístico (`/api/v1`) e painel dark 2D, com 66 testes. Deploy em produção ainda não feito; credenciais aguardam rotação. Diário da F2 em [`docs/17-implementacao-f2.md`](docs/17-implementacao-f2.md).
+> Estado: **F0 a F3 implementadas e rodando contra a conta real** — Fastify + SQLite + cliente Pluggy + webhook inbox + staleness + outbox + núcleo financeiro determinístico + cartão e recorrências, com 104 testes. O serviço escuta apenas em `127.0.0.1:3040`; publicação humana espera a decisão de borda da F6. Diários de execução em [`docs/17-implementacao-f2.md`](docs/17-implementacao-f2.md) e [`docs/18-implementacao-f3.md`](docs/18-implementacao-f3.md).
 
 ## Nome
 
@@ -23,18 +23,22 @@ Foram considerados:
 - Entregar um frontend dark-only, muito animado e com 3D progressivo, usando arquétipos originais de leitura/proteção, pulso elétrico e conquista determinística para tornar organização e economia mais claras.
 - Planejar uma fase futura em que o Hermes pergunta em Discord privado sobre transação sem contexto e reaplica a resposta segura em repetições, sem acoplar canal ao backend.
 
-## Rodando a base (F0 + F1 + F2)
+## Rodando
 
 ```bash
 npm install
-cp .env.example .env   # preencha PLUGGY_CLIENT_ID/SECRET (+ PLUGGY_ITEM_ID para sync)
-npm run dev             # tsx watch em 127.0.0.1:3040
+cp .env.example .env    # PLUGGY_CLIENT_ID/SECRET + PLUGGY_ITEM_ID
+npm run harvest         # ciclo completo contra a Pluggy (o log só mostra contagens)
+npm run dev             # painel em http://127.0.0.1:3040
 ```
+
+`.env` nunca é versionada (`.gitignore` bloqueia `.env*`) e o banco fica em
+`./data/`, também fora do Git.
 
 Testes:
 
 ```bash
-npm test        # vitest — 66 testes
+npm test        # vitest — 104 testes
 npm run typecheck
 npx tsx tests/e2e-manual.ts       # E2E real: sobe o servidor e bate nos endpoints
 npx tsx tests/e2e-f1.ts           # E2E F1: webhook → inbox → worker + staleness
@@ -54,10 +58,14 @@ npx tsx tests/e2e-f2.ts --serve   # painel com banco sintético em 127.0.0.1:304
 | `GET /api/v1/analytics/monthly-pace` | termômetro do mês, faixa histórica e composição da projeção |
 | `GET /api/v1/analytics/categories` | rollup por raiz com drill-down e comparação com o período anterior |
 | `GET /api/v1/transactions` | evidências para "Ver composição" (`eligibility=SPEND` fecha com o card) |
+| `GET /api/v1/credit-card` | limite com faixas, fatura em formação, countdown e encargos do ano |
+| `GET /api/v1/bills` | histórico de faturas com encargos, mínimo e liquidação pareada |
+| `GET /api/v1/analytics/recurrences` | recorrentes detectadas, cadência, reajuste e custo anualizado |
+| `GET /api/v1/accounts` | contas em DTO local (sem número, titular ou ID externo) |
 
 As rotas `/api/v1/*` devolvem o envelope comum (`computedAt`, `dataThrough`, `period`, `currencyCode`, `counts`, `metricVersion`, `quality`) com `metricId` em cada valor citável, `ETag` e `Cache-Control: private, no-store`.
 
-## O que já funciona (F0 + F1 + F2)
+## O que já funciona (F0 a F3)
 
 - **Harvest agendado**: job diário às 04:30 (config `HARVEST_HOUR`/`HARVEST_MINUTE`), paginação por cursor até `next=null`, trava anti-loop.
 - **Webhook-first**: recepção síncrona valida Bearer + envelope, persiste idempotente por `eventId` na `webhook_inbox` e responde rápido; worker processa depois. Reentrega da Pluggy (até 9x) é inofensiva.
@@ -74,6 +82,16 @@ As rotas `/api/v1/*` devolvem o envelope comum (`computedAt`, `dataThrough`, `pe
 - **Evento de ritmo** (`PACE_POLICY_V1`): `MONTH_PACE_HIGH` abre em 1,25 (WARNING/HIGH/CRITICAL por faixa) e só fecha abaixo de 1,15; sem entrega por canal nesta fase.
 - **Painel dark 2D**: Sentinela de Camadas (anéis) e Condutor do Pulso (descarga única), heatmap com lacuna visível, drawer de composição e respeito a `prefers-reduced-motion`.
 
+### Cartão e recorrências (F3)
+
+- **Uso do limite** com faixas nas fronteiras exatas (70/85/95%); limite ausente ou zero devolve indisponível sem dividir; limites desagregados nunca são somados ao total.
+- **Fatura em formação** agrupada por `billForecastDate`, com `POSTED`/`PENDING` e débito/crédito separados, liquidação pareada distinta do ajuste não classificado, e transação sem previsão em "ciclo não informado".
+- **Countdown** que diz "a data de vencimento passou" — nunca "não paga": a fonte não informa confirmação de pagamento.
+- **Encargos do ano** com componentes visíveis e headline conservador (`MAX_SOURCE_TOTAL`) enquanto a sobreposição não estiver provada.
+- **Pareamento `MATCH_V1`**: valor exato, mesma moeda, distância de 0 dia (HIGH) ou 1 dia (MEDIUM), candidato único por role; empate não vira match.
+- **Recorrências** por CNPJ ou descrição normalizada, com cadência, regularidade, estabilidade, reajuste e estados `ACTIVE`/`DORMANT`/`RESUMED`. Não existe alegação de "assinatura sem uso" — a fonte não tem telemetria de uso.
+- **Eventos** `CREDIT_LIMIT_BAND_CHANGED`, `BILL_DUE_SOON`, `RECURRENCE_PRICE_INCREASE` e `RECURRENCE_RESUMED_AFTER_GAP` na outbox, sem entrega por canal nesta fase.
+
 ## Stack
 
 | Camada | Escolha |
@@ -81,7 +99,7 @@ As rotas `/api/v1/*` devolvem o envelope comum (`computedAt`, `dataThrough`, `pe
 | Runtime | Node.js 22 + TypeScript estrito |
 | Backend | Fastify |
 | Banco | SQLite (better-sqlite3) com WAL + foreign_keys |
-| Testes | Vitest (66 testes, fetch mockado — nunca toca a API real) |
+| Testes | Vitest (104 testes, fetch mockado — nunca toca a API real) |
 | Frontend | shell HTML único dark (F0–F2); React/Vite e 3D lazy entram depois |
 | IA | fase futura (docs/10) |
 
@@ -94,10 +112,11 @@ As rotas `/api/v1/*` devolvem o envelope comum (`computedAt`, `dataThrough`, `pe
 
 ## Documentação completa
 
-Os 16 documentos de planejamento estão em [`docs/`](docs/) — começar por `01-visao-e-escopo.md`. ADRs em `13-decisoes.md`. O diário de execução das fases entregues está em `17-implementacao-f2.md`.
+Os 16 documentos de planejamento estão em [`docs/`](docs/) — começar por `01-visao-e-escopo.md`. ADRs em `13-decisoes.md`. Os diários de execução estão em `17-implementacao-f2.md` e `18-implementacao-f3.md`.
 
 ## Pendências / a confirmar
 
-- Rotacionar credenciais Pluggy antes de conectar produção (foram expostas em conversa).
-- Provisionar webhook `https://pulso-hooks.cursar.space/api/webhooks/pluggy` (modalidade por aplicação).
-- Gate de licença JJK vs mascotes originais (ADR-024) antes de assets públicos.
+- Provisionar webhook `https://pulso-hooks.cursar.space/api/webhooks/pluggy` (modalidade por aplicação); hoje o harvest agendado é o único gatilho.
+- Publicação humana depende da decisão de borda da F6 (Cloudflare Access ou proxy autenticador da tailnet); até lá o bind é só `127.0.0.1`.
+- Rotação das credenciais Pluggy foi **dispensada pelo titular** (ADR/registro em `docs/18-implementacao-f3.md`); a recomendação técnica continua valendo.
+- Referências a *Jujutsu Kaisen* na interface seguem a ADR-031: uso pessoal, não comercial, apenas texto — nenhum asset oficial no repositório.

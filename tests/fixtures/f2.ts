@@ -13,6 +13,8 @@ export const CAT_COMPRAS = '08000000';
 export const CAT_VESTUARIO = '08040000';
 export const CAT_ALIMENTACAO = '11000000';
 export const CAT_TRANSFER = '04000000';
+export const CAT_IOF = '15030000';
+export const CAT_JUROS = '02020000';
 
 export function makeDb(path = ':memory:'): Db {
   const db = openDb(path);
@@ -28,6 +30,8 @@ export function makeDb(path = ':memory:'): Db {
     [CAT_VESTUARIO, 'Vestuário'],
     [CAT_ALIMENTACAO, 'Alimentação'],
     [CAT_TRANSFER, 'Transferência mesma titularidade'],
+    [CAT_IOF, 'IOF'],
+    [CAT_JUROS, 'Juros'],
   ] as const) {
     db.prepare(
       `INSERT INTO categories (id, description, description_translated, level1_prefix)
@@ -180,4 +184,115 @@ export function seedMonthlySpend(
       categoryId,
     });
   }
+}
+
+// ---------------------------------------------------------------------------
+// F3 — cartão e recorrências
+// ---------------------------------------------------------------------------
+
+export interface BillInput {
+  dueDate: string;
+  closingDate?: string | null;
+  totalMinor: number;
+  minimumMinor?: number | null;
+  allowsInstallments?: boolean | null;
+  account?: string;
+}
+
+/** Fatura sem match: o pareamento é trabalho do MATCH_V1, não do fixture. */
+export function addBill(db: Db, input: BillInput): string {
+  const publicId = ulid();
+  db.prepare(
+    `INSERT INTO credit_card_bills (public_id, external_id, account_public_id, due_date,
+       bill_closing_date, total_amount_minor, currency_code, minimum_payment_amount_minor,
+       allows_installments, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,datetime('now'))`
+  ).run(
+    publicId,
+    `ext-${publicId}`,
+    input.account ?? CARD,
+    input.dueDate,
+    input.closingDate ?? null,
+    input.totalMinor,
+    'BRL',
+    input.minimumMinor ?? null,
+    input.allowsInstallments === undefined || input.allowsInstallments === null
+      ? null
+      : input.allowsInstallments
+        ? 1
+        : 0
+  );
+  return publicId;
+}
+
+export function addFinanceCharge(
+  db: Db,
+  billPublicId: string,
+  type: string,
+  amountMinor: number
+): void {
+  db.prepare(
+    `INSERT INTO bill_finance_charges (id, bill_public_id, external_id, type, amount_minor,
+       currency_code, additional_info, updated_at)
+     VALUES (?,?,?,?,?,?,?,datetime('now'))`
+  ).run(ulid(), billPublicId, null, type, amountMinor, 'BRL', null);
+}
+
+export function addBillPayment(
+  db: Db,
+  billPublicId: string,
+  params: { paymentDate: string | null; amountMinor: number }
+): string {
+  const publicId = ulid();
+  db.prepare(
+    `INSERT INTO bill_payments (public_id, external_id, bill_public_id, payment_date, amount_minor,
+       currency_code, updated_at)
+     VALUES (?,?,?,?,?,?,datetime('now'))`
+  ).run(publicId, `ext-${publicId}`, billPublicId, params.paymentDate, params.amountMinor, 'BRL');
+  return publicId;
+}
+
+/** Limite do cartão na conta; `null` no total simula limite indisponível. */
+export function setCardLimit(db: Db, totalLimit: number | null, available: number | null): void {
+  db.prepare('UPDATE accounts SET credit_limit = ?, available_credit_limit = ? WHERE public_id = ?').run(
+    totalLimit,
+    available,
+    CARD
+  );
+}
+
+/** Marca o ciclo previsto (`YYYY-MM`) de uma transação do cartão. */
+export function setBillForecast(db: Db, transactionPublicId: string, cycle: string | null): void {
+  db.prepare('UPDATE transactions SET bill_forecast_date = ? WHERE public_id = ?').run(
+    cycle,
+    transactionPublicId
+  );
+}
+
+/** Série de cobranças da mesma chave, para as recorrências. */
+export function addRecurringSeries(
+  db: Db,
+  params: {
+    dates: readonly string[];
+    amounts: readonly number[];
+    cnpj?: string | null;
+    description?: string;
+    account?: string;
+    categoryId?: string | null;
+  }
+): string[] {
+  const ids: string[] = [];
+  params.dates.forEach((date, i) => {
+    const id = addTx(db, {
+      date,
+      amount: params.amounts[i] ?? params.amounts[params.amounts.length - 1] ?? 0,
+      account: params.account ?? BANK,
+      categoryId: params.categoryId === undefined ? CAT_COMPRAS : params.categoryId,
+    });
+    db.prepare(
+      'UPDATE transactions SET merchant_cnpj = ?, description_raw_normalized = ? WHERE public_id = ?'
+    ).run(params.cnpj ?? null, params.description ?? 'ASSINATURA FICTICIA', id);
+    ids.push(id);
+  });
+  return ids;
 }

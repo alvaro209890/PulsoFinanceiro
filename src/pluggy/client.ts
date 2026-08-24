@@ -34,6 +34,54 @@ export interface PluggyAccount {
   marketingName: string | null;
   balance: number | null;
   currencyCode: string | null;
+  /** So o que a metrica usa: nada de agencia, conta, titular ou cartao. */
+  bankData: { closingBalance: number | null; automaticallyInvestedBalance: number | null } | null;
+  creditData: {
+    level: string | null;
+    brand: string | null;
+    creditLimit: number | null;
+    availableCreditLimit: number | null;
+    balanceDueDate: string | null;
+    balanceCloseDate: string | null;
+    minimumPayment: number | null;
+    status: string | null;
+    disaggregatedCreditLimits: Array<{
+      creditLineLimitType: string | null;
+      consolidationType: string | null;
+      isLimitFlexible: boolean | null;
+      usedAmount: number | null;
+      limitAmount: number | null;
+      availableAmount: number | null;
+      customizedLimitAmount: number | null;
+      currencyCode: string | null;
+    }>;
+  } | null;
+}
+
+/** Fatura como `/bills` devolve (medido no tenant em 24/08/2026). */
+export interface PluggyBill {
+  id: string;
+  dueDate: string;
+  billClosingDate: string | null;
+  totalAmount: number;
+  totalAmountCurrencyCode: string | null;
+  minimumPaymentAmount: number | null;
+  allowsInstallments: boolean | null;
+  financeCharges: Array<{
+    id: string | null;
+    type: string;
+    amount: number;
+    currencyCode: string | null;
+    additionalInfo: string | null;
+  }>;
+  payments: Array<{
+    id: string | null;
+    valueType: string | null;
+    paymentDate: string | null;
+    paymentMode: string | null;
+    amount: number;
+    currencyCode: string | null;
+  }>;
 }
 
 export interface PluggyTransactionPage {
@@ -140,15 +188,70 @@ export class PluggyClient {
     const body = (await this.getAuthorized(`${PLUGGY_BASE}/accounts?itemId=${encodeURIComponent(itemId)}`)) as {
       results?: Array<Record<string, unknown>>;
     };
-    return (body.results ?? []).map((a) => ({
-      id: String(a['id']),
-      type: String(a['type']),
-      subtype: strOrNull(a['subtype']),
-      name: strOrNull(a['name']),
-      marketingName: strOrNull(a['marketingName']),
-      balance: typeof a['balance'] === 'number' ? a['balance'] : null,
-      currencyCode: strOrNull(a['currencyCode']),
-    }));
+    return (body.results ?? []).map((a) => {
+      const bank = a['bankData'] as Record<string, unknown> | null | undefined;
+      const credit = a['creditData'] as Record<string, unknown> | null | undefined;
+      return {
+        id: String(a['id']),
+        type: String(a['type']),
+        subtype: strOrNull(a['subtype']),
+        name: strOrNull(a['name']),
+        marketingName: strOrNull(a['marketingName']),
+        balance: numOrNull(a['balance']),
+        currencyCode: strOrNull(a['currencyCode']),
+        bankData: bank
+          ? {
+              closingBalance: numOrNull(bank['closingBalance']),
+              automaticallyInvestedBalance: numOrNull(bank['automaticallyInvestedBalance']),
+            }
+          : null,
+        creditData: credit
+          ? {
+              level: strOrNull(credit['level']),
+              brand: strOrNull(credit['brand']),
+              creditLimit: numOrNull(credit['creditLimit']),
+              availableCreditLimit: numOrNull(credit['availableCreditLimit']),
+              balanceDueDate: strOrNull(credit['balanceDueDate']),
+              balanceCloseDate: strOrNull(credit['balanceCloseDate']),
+              minimumPayment: numOrNull(credit['minimumPayment']),
+              status: strOrNull(credit['status']),
+              // `identificationNumber` e `additionalCards[].number` existem no
+              // payload e NAO sao lidos aqui: numero de cartao nao entra.
+              disaggregatedCreditLimits: Array.isArray(credit['disaggregatedCreditLimits'])
+                ? (credit['disaggregatedCreditLimits'] as Array<Record<string, unknown>>).map((d) => ({
+                    creditLineLimitType: strOrNull(d['creditLineLimitType']),
+                    consolidationType: strOrNull(d['consolidationType']),
+                    isLimitFlexible: typeof d['isLimitFlexible'] === 'boolean' ? d['isLimitFlexible'] : null,
+                    usedAmount: numOrNull(d['usedAmount']),
+                    limitAmount: numOrNull(d['limitAmount']),
+                    availableAmount: numOrNull(d['availableAmount']),
+                    customizedLimitAmount: numOrNull(d['customizedLimitAmount']),
+                    currencyCode: strOrNull(d['limitAmountCurrencyCode'] ?? d['currencyCode']),
+                  }))
+                : [],
+            }
+          : null,
+      };
+    });
+  }
+
+  /**
+   * Faturas do cartao. A paginacao de `/bills` e por pagina, diferente da de
+   * transacoes (docs/09 5.3) e nao vaza para o frontend.
+   */
+  async getBills(accountId: string): Promise<PluggyBill[]> {
+    const out: PluggyBill[] = [];
+    let page = 1;
+    for (;;) {
+      const body = (await this.getAuthorized(
+        `${PLUGGY_BASE}/bills?accountId=${encodeURIComponent(accountId)}&page=${page}`
+      )) as { results?: Array<Record<string, unknown>>; totalPages?: number; page?: number };
+      for (const b of body.results ?? []) out.push(toBill(b));
+      const totalPages = typeof body.totalPages === 'number' ? body.totalPages : 1;
+      if (page >= totalPages || page >= 24) break;
+      page += 1;
+    }
+    return out;
   }
 
   /**
@@ -223,6 +326,43 @@ export function readJwtExpMs(jwt: string, nowMs: number): number {
 
 function strOrNull(v: unknown): string | null {
   return typeof v === 'string' && v.length > 0 ? v : null;
+}
+
+function numOrNull(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+}
+
+function toBill(b: Record<string, unknown>): PluggyBill {
+  const charges = Array.isArray(b['financeCharges'])
+    ? (b['financeCharges'] as Array<Record<string, unknown>>)
+    : [];
+  const payments = Array.isArray(b['payments'])
+    ? (b['payments'] as Array<Record<string, unknown>>)
+    : [];
+  return {
+    id: String(b['id']),
+    dueDate: String(b['dueDate'] ?? ''),
+    billClosingDate: strOrNull(b['billClosingDate']),
+    totalAmount: numOrNull(b['totalAmount']) ?? 0,
+    totalAmountCurrencyCode: strOrNull(b['totalAmountCurrencyCode']),
+    minimumPaymentAmount: numOrNull(b['minimumPaymentAmount']),
+    allowsInstallments: typeof b['allowsInstallments'] === 'boolean' ? b['allowsInstallments'] : null,
+    financeCharges: charges.map((c) => ({
+      id: strOrNull(c['id']),
+      type: String(c['type'] ?? 'UNKNOWN'),
+      amount: numOrNull(c['amount']) ?? 0,
+      currencyCode: strOrNull(c['currencyCode']),
+      additionalInfo: strOrNull(c['additionalInfo']),
+    })),
+    payments: payments.map((p) => ({
+      id: strOrNull(p['id']),
+      valueType: strOrNull(p['valueType']),
+      paymentDate: strOrNull(p['paymentDate']),
+      paymentMode: strOrNull(p['paymentMode']),
+      amount: numOrNull(p['amount']) ?? 0,
+      currencyCode: strOrNull(p['currencyCode']),
+    })),
+  };
 }
 
 /** Label seguro para erro: caminho sem query sensível (docs/04 §11). */
