@@ -357,3 +357,15 @@
 - Concluir o gate de licença ou aprovar os mascotes originais antes de assets da ADR-024/027 (mecânicas não dependem do gate).
 - Manter a ADR-025 bloqueada até aprovar principal, canal privado, retenção, rollback e testes de PII/idempotência.
 - Álvaro aprovar lista I1–I8 de `16-integracoes-discord-hermes.md` antes da F7.
+
+## ADR-029 — F1 implementada com scheduler in-process e inbox idempotente
+
+**Status:** aceita (24/08/2026, rodada Hermes-server).
+
+**Contexto:** F1 exige harvest agendado, webhook-first com inbox, staleness e outbox sem Docker nem Postgres (ADR-004).
+
+**Decisão:** scheduler do harvest roda dentro do processo Fastify (`setTimeout` com `unref`, 04:30 default configurável). Inbox `webhook_inbox` segue o schema de `05-modelo-de-dados.md`; worker separado processa RECEIVED/FAILED com backoff de 15 min e teto de 3 tentativas antes de DEAD. `STALE_POLICY_V1` avaliada pós-harvest; eventos saem na mesma transação da métrica.
+
+**Alternativas descartadas:** cron externo/systemd timer na F1 (move ops para fora do app antes do deploy decidido); processar webhook dentro do request (violaria resposta em <5s); HMAC próprio (docs/04: não inventar assinatura).
+
+**Por quê:** mantém o processo único self-hosted, cumpre os invariantes dos docs e simplifica o primeiro deploy.

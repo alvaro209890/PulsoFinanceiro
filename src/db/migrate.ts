@@ -6,6 +6,7 @@
  * o public_id local ULID (docs/04 §6).
  */
 import type Database from 'better-sqlite3';
+import { MIGRATION_0002 } from './migrations-0002.js';
 
 export const MIGRATIONS: readonly { id: number; name: string; sql: string }[] = [
   {
@@ -136,6 +137,7 @@ CREATE TABLE IF NOT EXISTS service_principals (
 );
 `,
   },
+  MIGRATION_0002,
 ];
 
 /** Aplica migrações pendentes. Idempotente e transacional por migração. */

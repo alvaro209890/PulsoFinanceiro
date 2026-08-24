@@ -2,7 +2,7 @@
 
 Painel financeiro pessoal, automático e self-hosted para transformar os dados já sincronizados pela Pluggy em visão consolidada, alertas e explicações acionáveis. O produto tem um único usuário, não possui cadastro nem autenticação própria e não recebe lançamentos manuais.
 
-> Estado: **F0 (base) implementada** — servidor Fastify + SQLite funcionando com testes. Sincronização Pluggy ainda não ligada em produção (F1).
+> Estado: **F0 concluída + F1 (sincronização) implementada** — Fastify + SQLite + cliente Pluggy + webhook inbox + staleness + outbox, com 27 testes. Deploy em produção ainda não feito; credenciais aguardam rotação.
 
 ## Nome
 
@@ -23,29 +23,39 @@ Foram considerados:
 - Entregar um frontend dark-only, muito animado e com 3D progressivo, usando arquétipos originais de leitura/proteção, pulso elétrico e conquista determinística para tornar organização e economia mais claras.
 - Planejar uma fase futura em que o Hermes pergunta em Discord privado sobre transação sem contexto e reaplica a resposta segura em repetições, sem acoplar canal ao backend.
 
-## Rodando a base (F0)
+## Rodando a base (F0 + F1)
 
 ```bash
 npm install
-cp .env.example .env   # preencha PLUGGY_CLIENT_ID/SECRET
+cp .env.example .env   # preencha PLUGGY_CLIENT_ID/SECRET (+ PLUGGY_ITEM_ID para sync)
 npm run dev             # tsx watch em 127.0.0.1:3040
 ```
 
 Testes:
 
 ```bash
-npm test        # vitest — 19 testes
+npm test        # vitest — 27 testes
 npm run typecheck
+npx tsx tests/e2e-manual.ts   # E2E real: sobe o servidor e bate nos endpoints
+npx tsx tests/e2e-f1.ts       # E2E F1: webhook → inbox → worker + staleness
 ```
 
-## API base
+## API
 
 | Rota | Descrição |
 |---|---|
-| `GET /api/health` | saúde do processo + último sync |
+| `GET /api/health` | saúde + staleness do item (`STALE_POLICY_V1`) |
 | `GET /api/summary?period=YYYY-MM` | fechamento mensal determinístico |
 | `POST /api/sync/run` | dispara harvest manual (operacional) |
-| `POST /api/webhooks/pluggy` | entrada de webhook (Bearer) |
+| `POST /api/webhooks/pluggy` | entrada de webhook (Bearer); envelope válido → inbox, resposta rápida |
+
+## O que já funciona (F0 + F1)
+
+- **Harvest agendado**: job diário às 04:30 (config `HARVEST_HOUR`/`HARVEST_MINUTE`), paginação por cursor até `next=null`, trava anti-loop.
+- **Webhook-first**: recepção síncrona valida Bearer + envelope, persiste idempotente por `eventId` na `webhook_inbox` e responde rápido; worker processa depois. Reentrega da Pluggy (até 9x) é inofensiva.
+- **Escopo de conta**: `transactions/*` com conta desconhecida dispara refresh de `/accounts`; persistindo a ausência → DEAD `ACCOUNT_SCOPE_INVALID`.
+- **STALE_POLICY_V1**: sem harvest após `nextAutoSyncAt + 6h` com dado ≥24h vira evento `SYNC_STALE` (WARNING/HIGH/CRITICAL por faixa); recuperação fecha o episódio e emite `SYNC_RECOVERED`.
+- **Outbox**: dedup por episódio ativo (`dedup_key` único enquanto condição aberta), `occurrence_count` acumula repetições.
 
 ## Stack
 

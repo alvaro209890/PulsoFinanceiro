@@ -13,6 +13,7 @@ import { getConfig } from '../config.js';
 import { PluggyClient, PluggyError } from '../pluggy/client.js';
 import { syncItem } from '../jobs/sync.js';
 import { monthlySummary } from '../metrics.js';
+import { receiveEnvelope, processInbox } from '../jobs/inbox.js';
 
 const PERIOD_RE = /^\d{4}-\d{2}$/;
 
@@ -20,10 +21,20 @@ export function registerRoutes(app: FastifyInstance, db: Db): void {
   app.get('/api/health', async () => {
     const integrity = db.pragma('quick_check', { simple: true });
     const lastRun = db.prepare('SELECT id, kind, ok, finished_at FROM sync_runs ORDER BY started_at DESC LIMIT 1').get();
+    const item = db.prepare('SELECT public_id, stale_bucket, next_auto_sync_at FROM items LIMIT 1').get() as
+      | { public_id: string; stale_bucket: string | null; next_auto_sync_at: string | null }
+      | undefined;
     return {
       status: 'ok',
       db: integrity === 'ok' ? 'ok' : 'degraded',
-      lastSync: lastRun ?? null,
+      sync: item
+        ? {
+            staleness: item.stale_bucket ?? 'OK',
+            policyVersion: 'STALE_POLICY_V1',
+            nextAutoSyncAt: item.next_auto_sync_at,
+          }
+        : null,
+      lastSyncRun: lastRun ?? null,
       time: new Date().toISOString(),
     };
   });
@@ -60,9 +71,23 @@ export function registerRoutes(app: FastifyInstance, db: Db): void {
     if (!expected || auth !== expected) {
       return reply.code(401).send({ error: 'UNAUTHORIZED' });
     }
-    // Payload é apenas sinal (docs/04 §4): registramos o evento de forma
-    // sanitizada e respondemos rápido; a coleta real usa GET.
-    app.log.info({ eventKeys: typeof req.body === 'object' && req.body ? Object.keys(req.body).length : 0 }, 'webhook recebido');
+    // Recepção síncrona, trabalho assíncrono (docs/06 §7): valida envelope,
+    // persiste idempotente por eventId e responde rápido; processamento
+    // real acontece no worker da inbox.
+    const body = req.body as Record<string, unknown> | null;
+    const accepted = receiveEnvelope(db, {
+      eventId: typeof body?.['eventId'] === 'string' ? (body['eventId'] as string) : '',
+      eventType: (body?.['event'] ?? '') as never,
+      itemId: typeof body?.['itemId'] === 'string' ? (body['itemId'] as string) : null,
+      accountId: typeof body?.['accountId'] === 'string' ? (body['accountId'] as string) : null,
+      triggeredBy: typeof body?.['triggeredBy'] === 'string' ? (body['triggeredBy'] as string) : null,
+      transactionIds: Array.isArray(body?.['transactionIds']) ? (body['transactionIds'] as string[]) : null,
+    });
+    if (!accepted.accepted) {
+      return reply.code(422).send({ error: accepted.reason });
+    }
+    void processInbox(db, new PluggyClient(cfg.pluggyClientId, cfg.pluggyClientSecret), cfg.pluggyItemId!)
+      .catch(() => {});
     return { received: true };
   });
 
