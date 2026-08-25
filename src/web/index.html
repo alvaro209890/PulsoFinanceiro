@@ -781,13 +781,16 @@ function renderCard(card) {
   const maxCat = Math.max(...cats.map((c) => c.debitPosted + c.debitPending), 0) || 1;
   el('bill-categories').innerHTML = cats.length === 0
     ? '<div class="empty">nenhum débito no ciclo</div>'
-    : cats.map((c) => `
+    : cats.map((c) => {
+        const total = c.debitPosted + c.debitPending;
+        return `
         <div style="margin-bottom:10px">
           <div class="row"><span style="font-size:13px">${c.categoryLabel ?? c.categoryId ?? 'Sem categoria'}</span>
-            <span style="font-size:13px">${money(c.debitPosted, card.currencyCode)}</span></div>
-          <div class="bar" style="margin:5px 0"><i style="width:${((c.debitPosted + c.debitPending) / maxCat) * 100}%"></i></div>
-          ${c.debitPending > 0 ? `<div class="meta pending">provisório ${money(c.debitPending, card.currencyCode)}</div>` : ''}
-        </div>`).join('');
+            <span style="font-size:13px;font-weight:600">${money(total, card.currencyCode)}</span></div>
+          <div class="bar" style="margin:5px 0"><i style="width:${(total / maxCat) * 100}%"></i></div>
+          <div class="meta">${c.debitPosted > 0 ? `confirmado ${money(c.debitPosted, card.currencyCode)}` : 'nada confirmado ainda'}${c.debitPending > 0 ? ` · provisório ${money(c.debitPending, card.currencyCode)}` : ''}</div>
+        </div>`;
+      }).join('');
 
   const costs = card.data.observedCreditCostsYear;
   el('charges-total').textContent = money(costs.conservativeTotal.amount, card.currencyCode);
