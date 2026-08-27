@@ -89,7 +89,12 @@ export function registerRoutes(app: FastifyInstance, db: Db): void {
       transactionIds: Array.isArray(body?.['transactionIds']) ? (body['transactionIds'] as string[]) : null,
     });
     if (!accepted.accepted) {
+      req.log.warn({ body, reason: accepted.reason }, 'webhook rejeitado');
       return reply.code(422).send({ error: accepted.reason });
+    }
+    if (accepted.ignored) {
+      req.log.info({ eventType: (body as Record<string, unknown>)?.['event'], reason: accepted.reason }, 'webhook ACK (tipo ignorado)');
+      return { received: true, ignored: true };
     }
     void processInbox(db, new PluggyClient(cfg.pluggyClientId, cfg.pluggyClientSecret), cfg.pluggyItemId!)
       .catch(() => {});

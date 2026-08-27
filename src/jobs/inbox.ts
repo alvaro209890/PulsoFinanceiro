@@ -30,9 +30,14 @@ const ALLOWED_TYPES = new Set([
 ]);
 
 /** Recepção síncrona (chamada pela rota após validar Bearer). 202 = aceito. */
-export function receiveEnvelope(db: Db, envelope: InboxEnvelope): { accepted: boolean; reason?: string } {
-  if (!envelope.eventId || !ALLOWED_TYPES.has(envelope.eventType)) {
+export function receiveEnvelope(db: Db, envelope: InboxEnvelope): { accepted: boolean; reason?: string; ignored?: boolean } {
+  if (!envelope.eventId) {
     return { accepted: false, reason: 'ENVELOPE_INVALID' };
+  }
+  // Tipos desconhecidos (ex: item/error, item/login_required, connector/*)
+  // são ACK-ados sem processamento para evitar até 9 retries da Pluggy.
+  if (!ALLOWED_TYPES.has(envelope.eventType)) {
+    return { accepted: true, ignored: true, reason: `IGNORED_TYPE:${envelope.eventType}` };
   }
   const needsAccount = envelope.eventType.startsWith('transactions/');
   if (needsAccount && !envelope.accountId) {
