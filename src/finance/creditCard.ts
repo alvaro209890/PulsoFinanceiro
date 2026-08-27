@@ -335,6 +335,10 @@ export function computeCreditCard(db: Db, options: CreditCardOptions = {}): Cred
       label: account.label,
       level: account.level,
       brand: account.brand,
+      // Próximo vencimento conhecido: fatura aberta (futura) ou o cadastro
+      // da conta (balance_due_date). Passado ≠ próximo: nunca inventado.
+      nextDueDate: openBill?.due_date ?? account.balanceDueDate ?? null,
+      nextDueDateSource: openBill ? 'open_bill' : account.balanceDueDate ? 'account_metadata' : null,
       limit: {
         total,
         available,

@@ -20,6 +20,11 @@ import {
 } from '../finance/merchants-pix.js';
 import { ANOMALIES_METRIC_VERSION, findDuplicates, logZscoreAnomalies } from '../finance/anomalies.js';
 import { SAVINGS_METRIC_VERSION, savingsEvolution } from '../finance/savings.js';
+import {
+  MILESTONES_METRIC_VERSION,
+  computeMilestones,
+  milestoneLabel,
+} from '../finance/milestones.js';
 import { MetricNotAvailable } from '../finance/pace.js';
 
 /** Mesma forma do ValidationError do v1.ts (não exportado lá). */
@@ -171,6 +176,65 @@ export function registerAnalyticsRoutes(app: FastifyInstance, db: Db): void {
     } catch (err) {
       return fail(reply, req, err);
     }
+  });
+
+  // ── GET /api/v1/analytics/milestones ────────────────────────────────────
+  // Avalia (idempotente) e lista os marcos determinísticos do Catalisador
+  // da Virada (docs/15 §2.3). Cálculo 100% no backend.
+  app.get('/api/v1/analytics/milestones', async (_req, reply) => {
+    try {
+      const result = db.transaction(() => computeMilestones(db))();
+      const rows = db
+        .prepare(
+          `SELECT id, milestone_key AS key, period, computed_at AS computedAt,
+                  celebrated_at AS celebratedAt
+             FROM milestone_events
+            ORDER BY period DESC, computed_at DESC`
+        )
+        .all() as Array<{
+        id: string;
+        key: string;
+        period: string;
+        computedAt: string;
+        celebratedAt: string | null;
+      }>;
+      const events = rows.map((r) => ({ ...r, label: milestoneLabel(r.key) }));
+      reply.header('ETag', `W/"${MILESTONES_METRIC_VERSION}:${dataRevision(db)}"`);
+      return buildEnvelope({
+        period: { from: '', to: '' },
+        currencyCode: 'BRL',
+        counts: { milestones: events.length, insertedThisRun: result.inserted },
+        metricVersion: MILESTONES_METRIC_VERSION,
+        quality: events.length ? 'complete' : 'insufficient',
+        dataThrough: dataThroughInstant(db),
+        data: { vaultTotal: result.total, milestones: events },
+      });
+    } catch (err) {
+      return fail(reply, _req, err);
+    }
+  });
+
+  // ── POST /api/v1/milestones/:id/celebrate ───────────────────────────────
+  // A UI marca que a celebração rodou neste dispositivo (docs/15 §3 F5).
+  // Idempotente; chave desconhecida é rejeitada — o cliente nunca inventa marco.
+  app.post<{ Params: { id: string } }>('/api/v1/milestones/:id/celebrate', async (req, reply) => {
+    const row = db
+      .prepare('SELECT id FROM milestone_events WHERE id = ?')
+      .get(req.params.id) as { id: string } | undefined;
+    if (!row) {
+      return reply.code(404).send(errorBody('NOT_FOUND', 'Marco não encontrado.', req));
+    }
+    const already = db
+      .prepare('SELECT celebrated_at AS at FROM milestone_events WHERE id = ?')
+      .get(req.params.id) as { at: string | null };
+    if (!already.at) {
+      db.prepare(
+        `UPDATE milestone_events
+            SET celebrated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+          WHERE id = ?`
+      ).run(req.params.id);
+    }
+    return { schemaVersion: '1.0', celebrated: true, alreadyCelebrated: Boolean(already.at) };
   });
 
   // ── PUT /api/v1/transactions/:id/category-override ────────────────────

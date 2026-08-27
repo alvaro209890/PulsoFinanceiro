@@ -104,6 +104,132 @@
   .pulse-ring { transition:stroke-dashoffset .9s ease; }
   .spark { width:100%; height:44px; display:block; }
   .hidden { display:none !important; }
+
+  /* ===== Arquétipos (docs/15) — Sentinela · Condutor · Catalisador ===== */
+  /* Sentinela de Camadas — campo hexagonal "respirando" (motion.ambient) */
+  @keyframes sentinel-breathe {
+    0%,100% { opacity:.35; transform:scale(1); }
+    50% { opacity:.7; transform:scale(1.03); }
+  }
+  .sentinel-field {
+    transform-origin:center; animation:sentinel-breathe 6s ease-in-out infinite;
+    will-change:transform,opacity;
+  }
+  .sentinel-field.risk { animation:none; opacity:.9; filter:drop-shadow(0 0 4px var(--danger)); }
+
+  /* Anel de cobrança futura — "Infinito": desacelera e para antes do núcleo */
+  .orbit-wrap { position:relative; width:120px; height:120px; flex:none; }
+  .orbit-charge {
+    position:absolute; left:50%; top:50%; width:10px; height:10px; margin:-5px;
+    border-radius:50%; background:var(--violet);
+    box-shadow:0 0 8px var(--violet); font-size:0;
+  }
+  .orbit-charge.stuck { background:var(--danger); box-shadow:0 0 10px var(--danger); }
+  .orbit-label {
+    position:absolute; inset:auto 0 -2px 0; text-align:center;
+    font-size:9.5px; color:var(--muted); white-space:nowrap;
+  }
+
+  /* Condutor do Pulso — trilha elétrica da transação nova (≤600ms, sem loop) */
+  @keyframes bolt-run { from { stroke-dashoffset:var(--len); } to { stroke-dashoffset:0; } }
+  .bolt-path {
+    fill:none; stroke:var(--pulse); stroke-width:2; stroke-linecap:round;
+    filter:drop-shadow(0 0 3px var(--pulse));
+  }
+  .bolt-run { animation:bolt-run var(--dur,.55s) ease-out forwards; }
+
+  /* Carga semanal do Condutor — barra segmentada, máx 7 */
+  .charge-segs { display:flex; gap:3px; margin-top:8px; align-items:center; }
+  .charge-segs > i {
+    width:16px; height:7px; border-radius:3px; background:var(--surface3);
+    border:1px solid var(--border);
+  }
+  .charge-segs > i.on {
+    background:linear-gradient(90deg,var(--pulse),var(--brand)); border-color:transparent;
+    box-shadow:0 0 5px color-mix(in srgb,var(--pulse) 60%,transparent);
+  }
+
+  /* Catalisador — três anéis cinéticos convergindo no resultado já provado */
+  @keyframes reel-spin {
+    from { transform:translateY(0); }
+    to   { transform:translateY(calc(var(--stop) * -1)); }
+  }
+  .reels { display:flex; gap:6px; justify-content:center; padding:6px 0; }
+  .reel {
+    width:44px; height:44px; overflow:hidden; border-radius:10px;
+    background:var(--surface3); border:1px solid var(--border-strong);
+    display:flex; align-items:flex-start;
+  }
+  .reel > div {
+    display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+    transition:none;
+  }
+  .reel.spun > div { animation:reel-spin 1.1s cubic-bezier(.2,.9,.25,1) forwards; }
+  .reel > div > span {
+    height:42px; display:flex; align-items:center; justify-content:center;
+    font-size:20px; line-height:42px; width:100%;
+  }
+  .celebrate-banner {
+    text-align:center; font-size:12px; color:var(--text2); margin-top:6px; min-height:16px;
+  }
+  .celebrate-banner b { color:var(--celebration); }
+
+  /* Cofre de fragmentos (tela Poupança/Análises) */
+  .vault { display:flex; align-items:center; gap:14px; margin-top:10px; }
+  .vault-box {
+    position:relative; width:74px; height:56px; flex:none;
+    transform-style:preserve-3d; perspective:300px;
+  }
+  .vault-lid, .vault-body {
+    position:absolute; border-radius:8px;
+    background:linear-gradient(145deg,var(--surface3),var(--surface1));
+    border:1px solid var(--border-strong);
+  }
+  .vault-lid {
+    left:4px; top:8px; right:4px; height:18px;
+    transform-origin:left bottom; transform:rotateX(35deg);
+    transition:transform .5s ease;
+  }
+  .vault.opening .vault-lid { transform:rotateX(-40deg) translateY(-6px); }
+  .vault-body { inset:22px 0 0; height:34px; }
+  .vault-shards { display:flex; gap:5px; align-items:center; flex-wrap:wrap; }
+  .shard {
+    width:13px; height:13px; border-radius:4px; transform:rotate(var(--r,12deg));
+    background:linear-gradient(135deg,var(--celebration),color-mix(in srgb,var(--celebration) 45%,#0000));
+    border:1px solid color-mix(in srgb,var(--celebration) 70%,var(--border));
+  }
+  .shard:hover::after {
+    content:attr(data-tip);
+    position:absolute; z-index:5; transform:translateY(-130%);
+    background:var(--surface2); border:1px solid var(--border-strong);
+    padding:4px 8px; border-radius:8px; font-size:10.5px; white-space:nowrap;
+    box-shadow:0 4px 14px #000a;
+  }
+  .shard { cursor:default; }
+
+  /* Overlay de celebração — único, dismissível por Esc/clique */
+  .celebrate-overlay {
+    position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center;
+    background:var(--overlay); backdrop-filter:blur(2px);
+  }
+  .celebrate-panel {
+    text-align:center; padding:28px 36px; border-radius:20px;
+    background:var(--surface2); border:1px solid var(--border-strong);
+    box-shadow:0 0 60px color-mix(in srgb,var(--celebration) 25%,transparent);
+    max-width:min(420px,92vw);
+  }
+  .celebrate-panel .reels { transform:scale(1.15); margin:14px 0; }
+  @keyframes celebrate-pop {
+    0% { transform:scale(.7); opacity:0; }
+    60% { transform:scale(1.05); opacity:1; }
+    100% { transform:scale(1); opacity:1; }
+  }
+  .celebrate-panel { animation:celebrate-pop .45s ease-out; }
+
+  /* Profundidade 3D dos anéis do patrimônio (CSS puro, fallback seguro) */
+  .nw-orbit { perspective:400px; }
+  .nw-orbit svg { filter:drop-shadow(0 6px 10px rgba(0,0,0,.45)); }
+
   @media (prefers-reduced-motion: reduce) { * { animation:none !important; transition:none !important; } }
   @media (max-width:420px) {
     .metric { font-size:26px; }
@@ -139,27 +265,37 @@
     <section class="grid cols-2" style="margin-bottom:12px">
       <div class="card">
         <h2>Patrimônio observável <span class="lore">· Six Eyes (Gojo): leitura de camadas</span></h2>
-        <div class="rings">
-          <svg width="120" height="120" viewBox="0 0 120 120" role="img" aria-labelledby="nw-title">
-            <title id="nw-title">Camadas do patrimônio observável</title>
-            <circle cx="60" cy="60" r="52" fill="none" stroke="var(--surface3)" stroke-width="9"></circle>
-            <circle id="ring-bank" class="pulse-ring" cx="60" cy="60" r="52" fill="none"
-                    stroke="var(--infinity)" stroke-width="9" stroke-linecap="round"
-                    stroke-dasharray="327" stroke-dashoffset="327" transform="rotate(-90 60 60)"></circle>
-            <circle cx="60" cy="60" r="38" fill="none" stroke="var(--surface3)" stroke-width="9"></circle>
-            <circle id="ring-bill" class="pulse-ring" cx="60" cy="60" r="38" fill="none"
-                    stroke="var(--orange)" stroke-width="9" stroke-linecap="round"
-                    stroke-dasharray="239" stroke-dashoffset="239" transform="rotate(-90 60 60)"></circle>
-          </svg>
+        <div class="rings nw-orbit">
+          <div class="orbit-wrap">
+            <svg width="120" height="120" viewBox="0 0 120 120" role="img" aria-labelledby="nw-title">
+              <title id="nw-title">Camadas do patrimônio observável</title>
+              <polygon id="sentinel-field" class="sentinel-field"
+                       points="60,6 108,33 108,87 60,114 12,87 12,33"
+                       fill="color-mix(in srgb, var(--infinity) 9%, transparent)"
+                       stroke="var(--infinity)" stroke-opacity=".45" stroke-width="1"></polygon>
+              <circle cx="60" cy="60" r="52" fill="none" stroke="var(--surface3)" stroke-width="9"></circle>
+              <circle id="ring-bank" class="pulse-ring" cx="60" cy="60" r="52" fill="none"
+                      stroke="var(--infinity)" stroke-width="9" stroke-linecap="round"
+                      stroke-dasharray="327" stroke-dashoffset="327" transform="rotate(-90 60 60)"></circle>
+              <circle cx="60" cy="60" r="38" fill="none" stroke="var(--surface3)" stroke-width="9"></circle>
+              <circle id="ring-bill" class="pulse-ring" cx="60" cy="60" r="38" fill="none"
+                      stroke="var(--orange)" stroke-width="9" stroke-linecap="round"
+                      stroke-dasharray="239" stroke-dashoffset="239" transform="rotate(-90 60 60)"></circle>
+            </svg>
+            <!-- "Infinito": a cobrança futura desacelera e PARA antes do núcleo (docs/15 §2.1) -->
+            <span id="orbit-charge" class="orbit-charge hidden" style="left:60px;top:8px"></span>
+          </div>
           <div style="flex:1;min-width:150px">
             <div class="metric" id="nw-amount">—</div>
             <div class="meta" id="nw-change">variação indisponível</div>
             <div class="legend">
               <span><i style="background:var(--infinity)"></i>saldo em conta</span>
               <span><i style="background:var(--orange)"></i>fatura aberta</span>
+              <span><i style="background:var(--violet)"></i>cobrança futura</span>
             </div>
           </div>
         </div>
+        <div class="meta" id="orbit-note"></div>
         <svg class="spark" id="nw-spark" viewBox="0 0 300 44" preserveAspectRatio="none" aria-hidden="true"></svg>
         <div id="nw-components" class="meta"></div>
       </div>
@@ -183,6 +319,16 @@
         </div>
         <button class="link" data-composition="spend">Ver composição</button>
       </div>
+    </section>
+
+    <!-- Condutor do Pulso: carga da semana (streak de sync/revisão) -->
+    <section class="card" style="margin-bottom:12px">
+      <div class="row">
+        <h2 style="margin:0">Carga do Condutor <span class="lore">· Kashimo: cada dia sincronizado carrega</span></h2>
+        <span class="chip lore" id="conductor-chip">—</span>
+      </div>
+      <div class="charge-segs" id="charge-segs" role="img" aria-label="Dias consecutivos com sincronização saudável"></div>
+      <div class="meta" id="conductor-note">perder sync por falha não zera a carga — problema de infra não pune você</div>
     </section>
 
     <section class="grid cols-3" style="margin-bottom:12px">
@@ -369,6 +515,20 @@
         </div>
       </div>
       <div id="savings-list"><div class="empty">carregando…</div></div>
+
+      <!-- Catalisador da Virada: cofre de fragmentos (docs/15 §2.3) -->
+      <h2 style="margin-top:16px">Cofre da virada <span class="lore">· Hakari: “não foi sorte. Foi constância.”</span></h2>
+      <div class="vault" id="vault">
+        <div class="vault-box">
+          <div class="vault-lid"></div>
+          <div class="vault-body"></div>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div id="vault-count" class="metric sm">—</div>
+          <div class="meta">fragmentos = marcos provados pelo backend; passe o mouse para ver qual métrica cada um representa</div>
+        </div>
+      </div>
+      <div class="vault-shards" id="vault-shards"></div>
     </section>
   </div>
 
@@ -499,6 +659,9 @@ async function load() {
     renderHeat(overview);
     renderCategories(categories);
     renderAlerts(overview);
+    renderSentinelField(health, overview);
+    renderBolt(overview);
+    renderConductorCharge(health);
     el('footer-meta').textContent =
       `calculado em ${new Date(overview.computedAt).toLocaleString('pt-BR')} · dado até ` +
       `${overview.dataThrough ? new Date(overview.dataThrough).toLocaleString('pt-BR') : 'sem harvest registrado'} · ` +
@@ -876,6 +1039,7 @@ async function loadAnalytics() {
   loadMerchants();
   loadPix();
   loadSavings();
+  loadMilestones();
   // anomalias dependem de amostra; falha isolada não derruba a aba
   try {
     const result = await getJson('/api/v1/analytics/anomalies');
@@ -974,6 +1138,204 @@ async function loadSavings() {
       </table>`;
   } catch (err) {
     el('savings-list').innerHTML = `<div class="empty">falha ao carregar (${err.message})</div>`;
+  }
+}
+
+// ------------------------- Arquétipos (docs/15) ------------------------------
+const REEL_GLYPHS = ['◆', '⬡', '✦'];
+
+function hexPoint(cx, cy, r, angleDeg) {
+  const a = ((angleDeg - 90) * Math.PI) / 180;
+  return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+}
+
+/**
+ * Sentinela de Camadas — campo protetor respira quando sync saudável;
+ * racha (estado risco, sem loop) quando projeção fica negativa.
+ */
+async function renderSentinelField(health, overview) {
+  const field = el('sentinel-field');
+  if (!field) return;
+  const staleness = health?.sync?.staleness ?? 'CRITICAL';
+  field.classList.toggle('risk', staleness !== 'OK');
+
+  // "Infinito": cobrança futura conhecida desacelera e PARA antes do núcleo.
+  const charge = el('orbit-charge');
+  const note = el('orbit-note');
+  if (!charge || !note) return;
+  const billComp = (overview.data.netWorthComponents ?? [])
+    .find((c) => c.kind === 'OPEN_BILL');
+  if (!billComp || !overview.data.netWorth.amount) {
+    charge.classList.add('hidden');
+    note.textContent = '';
+    return;
+  }
+  // Data-alvo: dueDate do componente; sem ele, o PRÓXIMO vencimento do
+  // cartão (nextDueDate do /credit-card). Sem fonte de data, o Infinito
+  // fica em silêncio — nenhuma data é inventada (docs/09 §2.4).
+  let targetDate = billComp.dueDate;
+  let days = null;
+  if (!targetDate) {
+    try {
+      const card = await getJson('/api/v1/credit-card');
+      if (card.data.nextDueDate) targetDate = card.data.nextDueDate;
+    } catch { /* silêncio honesto */ }
+  }
+  if (targetDate) days = Math.round((new Date(`${targetDate}T12:00:00Z`).getTime() - Date.now()) / 86_400_000);
+  if (days === null || days < 0) {
+    // Data no passado = ciclo já vencido, não é "cobrança futura". Silêncio.
+    charge.classList.add('hidden');
+    note.textContent = '';
+    return;
+  }
+  const bank = overview.data.netWorth.amount; // saldo livre = núcleo
+  // A partícula percorre o raio externo → interno proporcional à proximidade
+  // da data, mas NUNCA entra no núcleo: para em r=22px (borda do anel 1).
+  const progress = Math.max(0, Math.min(1, 1 - Math.max(0, days) / 30));
+  const r = 52 - progress * (52 - 24);
+  const [x, y] = hexPoint(60, 60, r, 0);
+  const insufficient = billComp.amount !== null && Math.abs(billComp.amount) > bank && days <= 30;
+  charge.className = `orbit-charge${insufficient ? ' stuck' : ''}`;
+  charge.classList.remove('hidden');
+  charge.style.left = `${x.toFixed(1)}px`;
+  charge.style.top = `${y.toFixed(1)}px`;
+  charge.animate(
+    [
+      { transform: `translate(${60 - x}px, ${8 - y}px)`, offset: 0 },
+      { transform: `translate(${60 - x}px, ${8 - y}px)`, offset: .55 },
+      { transform: 'translate(0,0)', offset: 1 },
+    ],
+    { duration: 1400, easing: 'ease-in', fill: 'forwards' }
+  );
+  note.textContent = insufficient
+    ? `Essa cobrança chega antes da reposição — fatura vence em ${days} dia(s) e excede o saldo livre.`
+    : `Cobrança futura desacelera ao chegar — vence em ${days} dia(s), dentro da barreira.`;
+}
+
+/**
+ * Condutor do Pulso — trilha elétrica curta no card do patrimônio quando o
+ * dado muda (uma descarga por mudança, nunca loop; ≤600ms).
+ */
+let lastNetWorth = null;
+function renderBolt(overview) {
+  const amount = overview.data.netWorth.amount;
+  if (lastNetWorth !== null && amount !== null && amount !== lastNetWorth) {
+    const svg = el('nw-spark');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const len = 320;
+    let d = '';
+    for (let i = 0; i <= 8; i += 1) {
+      const x = (i / 8) * 300;
+      const y = i === 0 ? 40 : 4 + Math.random() * 36;
+      d += `${i === 0 ? 'M' : 'L'}${x.toFixed(0)},${y.toFixed(0)} `;
+    }
+    path.setAttribute('d', d.trim());
+    path.setAttribute('class', 'bolt-path bolt-run');
+    path.style.setProperty('--len', String(len));
+    path.setAttribute('stroke-dasharray', String(len));
+    svg.append(path);
+    setTimeout(() => path.remove(), 700);
+  }
+  lastNetWorth = amount;
+}
+
+/** Carga semanal: dias consecutivos com sync saudável (persistência local por data). */
+function renderConductorCharge(health) {
+  const segs = el('charge-segs');
+  const chip = el('conductor-chip');
+  const ok = health?.sync?.staleness === 'OK';
+  const today = new Date().toISOString().slice(0, 10);
+  let st;
+  try { st = JSON.parse(localStorage.getItem('pulse-conductor') ?? '{}'); } catch { st = {}; }
+  if (st.lastDay !== today) {
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    // Sync saudável hoje estende a carga; falha de infra não zera (docs/15 §2.2).
+    st.days = st.lastDay === yesterday ? Math.min(7, (st.days ?? 0) + 1)
+      : ok ? 1 : (st.days ?? 0);
+    st.lastDay = today;
+    try { localStorage.setItem('pulse-conductor', JSON.stringify(st)); } catch { /* modo privado */ }
+  }
+  const filled = Math.max(ok ? 1 : 0, Math.min(7, st.days ?? 0));
+  segs.innerHTML = Array.from({ length: 7 }, (_, i) =>
+    `<i class="${i < filled ? 'on' : ''}" aria-hidden="true"></i>`).join('');
+  chip.textContent = ok ? `carga ${filled}/7 · sync saudável` : 'sync com pendência';
+  chip.className = `chip lore${ok ? '' : ' warn'}`;
+}
+
+/**
+ * Catalisador da Virada — marcos determinísticos do backend.
+ * Os três anéis SEMPRE param alinhados no resultado já calculado (ADR-024):
+ * animação dá peso ao feito, não suspense.
+ */
+async function loadMilestones() {
+  try {
+    const result = await getJson('/api/v1/analytics/milestones');
+    const events = result.data.milestones;
+    el('vault-count').textContent = String(result.data.vaultTotal);
+
+    // Cofre: um fragmento por marco, tooltip mês + métrica.
+    const shards = el('vault-shards');
+    shards.innerHTML = events.length === 0 ? '<span class="empty">nenhum marco provado ainda</span>' :
+      events.map((e) => `<span class="shard" style="--r:${((parseInt(e.id.slice(-1), 36) % 24) - 12)}deg" data-tip="${e.period}: ${e.label}" tabindex="0"></span>`).join('');
+
+    // Celebração: só o primeiro marco ainda não celebrado neste dispositivo.
+    const pending = events.find((e) => !e.celebratedAt);
+    if (pending) await celebrate(pending);
+  } catch {
+    el('vault-count').textContent = '—';
+  }
+}
+
+function spinReels(container, glyphIndex) {
+  // 3 glifos × 4 voltas = 12 posições; todos os reels param NO MESMO glifo
+  // (voltas diferentes, destino único — ADR-024: resultado já provado).
+  const strip = Array.from({ length: 12 }, (_, i) => REEL_GLYPHS[i % REEL_GLYPHS.length]);
+  container.innerHTML = [0, 1, 2].map(() => `
+    <div class="reel">
+      <div>${strip.map((g) => `<span>${g}</span>`).join('')}</div>
+    </div>`).join('');
+  return new Promise((resolve) => {
+    const reels = [...container.querySelectorAll('.reel')];
+    reels.forEach((reel, i) => {
+      reel.style.setProperty('--stop', String(glyphIndex + REEL_GLYPHS.length * (i + 1)));
+      setTimeout(() => reel.classList.add('spun'), i * 180);
+    });
+    setTimeout(resolve, 1100 + 360 + 120);
+  });
+}
+
+async function celebrate(event) {
+  const overlay = document.createElement('div');
+  overlay.className = 'celebrate-overlay';
+  overlay.innerHTML = `
+    <div class="celebrate-panel" role="dialog" aria-modal="true" aria-label="Marco atingido">
+      <div class="label">marco provado · ${event.period}</div>
+      <div class="reels"></div>
+      <strong style="font-size:15px">${event.label}</strong>
+      <div class="celebrate-banner"><b>não foi sorte. foi constância.</b></div>
+      <button class="link" style="margin-top:10px">continuar (Esc)</button>
+    </div>`;
+  document.body.append(overlay);
+  document.body.style.overflow = 'hidden';
+
+  await spinReels(overlay.querySelector('.reels'), 2);
+
+  fetch(`/api/v1/milestones/${event.id}/celebrate`, { method:'POST' }).catch(() => {});
+  sessionStorage.setItem(`pulse-celebrated-${event.id}`, '1');
+
+  const close = () => {
+    overlay.remove();
+    document.body.style.overflow = '';
+    document.removeEventListener('keydown', onKey);
+  };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.tagName === 'BUTTON') close(); });
+  // Cofre abre junto: feedback físico do depósito.
+  const vault = el('vault');
+  if (vault) {
+    vault.classList.add('opening');
+    setTimeout(() => vault.classList.remove('opening'), 900);
   }
 }
 
