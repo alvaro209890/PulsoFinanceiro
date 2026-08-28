@@ -73,7 +73,7 @@ export async function syncItem(
         label: deriveLabel(a),
         balance: a.balance,
         currency: a.currencyCode,
-        closingBalance: a.bankData?.closingBalance ?? null,
+        closingBalance: a.subtype === "SAVINGS_ACCOUNT" ? (a.balance ?? null) : (a.bankData?.closingBalance ?? null),
         credit: a.creditData
           ? {
               level: a.creditData.level,
@@ -174,6 +174,16 @@ function applyTransaction(
   }
   const merchant = t['merchant'] as Record<string, unknown> | null | undefined;
   const cardMeta = t['creditCardMetadata'] as Record<string, unknown> | null | undefined;
+  let catId = resolveCategory(strOrNull(t['categoryId']), categoryState);
+  const rawDesc = String(strOrNull(t['descriptionRaw']) ?? strOrNull(t['description']) ?? '');
+  if (rawDesc.includes('DEPARTAMENTO DE ÁGUA') && (!catId || catId.startsWith('04'))) {
+    catId = '17020001';
+  } else if (rawDesc.includes('Recarga - TIM') && (!catId || catId.startsWith('04'))) {
+    catId = '07010000';
+  } else if (rawDesc.includes('SEFAZ MT') && (!catId || catId.startsWith('04'))) {
+    catId = '15000000';
+  }
+
   const { inserted } = upsertTransaction(db, {
     externalId,
     accountPublicId,
@@ -184,7 +194,7 @@ function applyTransaction(
     type: t['type'] === 'DEBIT' || t['type'] === 'CREDIT' ? t['type'] : null,
     operationType: strOrNull(t['operationType']),
     description: strOrNull(t['description']),
-    categoryId: resolveCategory(strOrNull(t['categoryId']), categoryState),
+    categoryId: catId,
     balanceAfter: typeof t['balance'] === 'number' ? t['balance'] : null,
     orderTiebreak: typeof t['order'] === 'number' ? t['order'] : null,
     rawJsonSanitized: JSON.stringify(sanitizeDeep(t)),
