@@ -11,6 +11,7 @@ import type Database from 'better-sqlite3';
 import { MIGRATION_0002 } from './migrations-0002.js';
 import { MIGRATION_0003 } from './migrations-0003.js';
 import { MIGRATION_0004 } from './migrations-0004.js';
+import { MIGRATION_0005 } from './migrations-0005.js';
 
 export const MIGRATIONS: readonly { id: number; name: string; sql: string }[] = [
   {
@@ -144,6 +145,7 @@ CREATE TABLE IF NOT EXISTS service_principals (
   MIGRATION_0002,
   MIGRATION_0003,
   MIGRATION_0004,
+  MIGRATION_0005,
 ];
 
 /** Aplica migrações pendentes. Idempotente e transacional por migração. */
