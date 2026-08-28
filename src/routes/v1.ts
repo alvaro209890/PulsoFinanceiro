@@ -50,6 +50,7 @@ import {
   type RecurrenceStatus,
 } from '../finance/recurrences.js';
 import { addDays } from '../finance/time.js';
+import { executeAIAction, type AIActionType } from '../ai/actions.js';
 
 const MAX_RANGE_DAYS = 366;
 
@@ -285,6 +286,61 @@ export function registerV1Routes(app: FastifyInstance, db: Db): void {
 
       reply.header('Cache-Control', 'private, no-store');
       return { schemaVersion: '1.0', data: page.data, nextCursor: page.nextCursor };
+    } catch (err) {
+      return fail(reply, req, err);
+    }
+  });
+
+  // POST /api/v1/ai/actions — docs/10-camada-ia.md
+  app.post<{
+    Body: {
+      action: string;
+      period?: string | null;
+      targetRef?: string | null;
+      timezone?: string;
+    };
+  }>('/api/v1/ai/actions', async (req, reply) => {
+    try {
+      const body = req.body;
+      if (!body || typeof body.action !== 'string') {
+        throw new ValidationError([{ field: 'action', reason: 'Ação obrigatória' }]);
+      }
+      const allowedActions: AIActionType[] = [
+        'MONTHLY_NARRATIVE',
+        'EXPLAIN_ANOMALY',
+        'NAME_RECURRENCE',
+        'SUGGEST_CATEGORY',
+        'COMMENT_FORECAST',
+      ];
+      if (!allowedActions.includes(body.action as AIActionType)) {
+        throw new ValidationError([
+          { field: 'action', reason: `Valores aceitos: ${allowedActions.join(', ')}` },
+        ]);
+      }
+
+      const timezone = parseTimezone(body.timezone);
+      const result = await executeAIAction(db, {
+        action: body.action as AIActionType,
+        period: body.period,
+        targetRef: body.targetRef,
+        timezone,
+      });
+
+      const now = new Date();
+      const periodRange = monthRange(body.period ?? monthOf(todayCivil(timezone)));
+
+      reply.header('Cache-Control', 'private, no-store');
+      return {
+        schemaVersion: '1.0',
+        computedAt: now.toISOString(),
+        dataThrough: dataThroughInstant(db),
+        period: { from: periodRange.from, to: periodRange.to, timezone },
+        currencyCode: 'BRL',
+        counts: { metricRefs: result.metricRefs.length },
+        metricVersion: `ai-${body.action.toLowerCase().replace(/_/g, '-')}.v1`,
+        quality: 'complete',
+        data: result,
+      };
     } catch (err) {
       return fail(reply, req, err);
     }

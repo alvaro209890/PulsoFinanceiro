@@ -23,8 +23,8 @@ interface StalenessInput {
   itemStatus: string;
 }
 
-export function evaluateStaleness(db: Db, input: StalenessInput): StaleBucket {
-  const now = Date.now();
+export function evaluateStaleness(db: Db, input: StalenessInput, nowMs: number = Date.now()): StaleBucket {
+  const now = nowMs;
 
   const harvestAgeMs = input.lastHarvestAt ? now - Date.parse(input.lastHarvestAt) : Number.POSITIVE_INFINITY;
   const dataAgeMs = input.dataThrough ? now - Date.parse(input.dataThrough) : Number.POSITIVE_INFINITY;

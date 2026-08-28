@@ -98,7 +98,7 @@ describe('STALE_POLICY_V1 (docs/14)', () => {
       dataThrough: hoursAgo(30),
       nextAutoSyncAt: hoursAgo(20), // deadline -14h, sem harvest desde então
       itemStatus: 'UPDATED',
-    });
+    }, NOW.getTime());
     expect(bucket).toBe('WARNING');
     const ev = db.prepare("SELECT severity FROM outbox_events WHERE event_type='SYNC_STALE'").get() as any;
     expect(ev.severity).toBe('WARNING');
@@ -109,13 +109,13 @@ describe('STALE_POLICY_V1 (docs/14)', () => {
     let b = evaluateStaleness(db, {
       itemPublicId: 'ipub', lastHarvestAt: null, dataThrough: hoursAgo(80),
       nextAutoSyncAt: hoursAgo(20), itemStatus: 'UPDATED',
-    });
+    }, NOW.getTime());
     expect(b).toBe('HIGH');
 
     b = evaluateStaleness(db, {
       itemPublicId: 'ipub', lastHarvestAt: null, dataThrough: hoursAgo(200),
       nextAutoSyncAt: hoursAgo(20), itemStatus: 'UPDATED',
-    });
+    }, NOW.getTime());
     expect(b).toBe('CRITICAL');
     const crit = db.prepare("SELECT dedup_key FROM outbox_events WHERE event_type='SYNC_STALE' AND severity='CRITICAL'").get() as any;
     expect(crit.dedup_key).toBe('sync-stale:ipub:CRITICAL');

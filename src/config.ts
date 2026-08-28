@@ -1,6 +1,6 @@
 /**
  * Config central do PulsoFinanceiro.
- * Fonte: docs/03-infra-e-deploy.md e docs/11-seguranca-e-segredos.md
+ * Fonte: docs/03-infra-e-deploy.md, docs/10-camada-ia.md e docs/11-seguranca-e-segredos.md
  *
  * Regra dura: segredo só via ambiente, nunca em arquivo versionado.
  * O backend é o ÚNICO componente que fala com api.pluggy.ai (docs/04 §1).
@@ -32,6 +32,9 @@ export interface AppConfig {
   pluggyClientSecret: string;
   pluggyItemId: string | null;
   webhookBearerToken: string | null;
+  aiBaseUrl: string;
+  aiApiKey: string;
+  aiModel: string;
 }
 
 /** Lê config a cada chamada — permite testes com env isolada. */
@@ -44,5 +47,8 @@ export function getConfig(): AppConfig {
     pluggyClientSecret: required('PLUGGY_CLIENT_SECRET'),
     pluggyItemId: process.env.PLUGGY_ITEM_ID || null,
     webhookBearerToken: process.env.PLUGGY_WEBHOOK_BEARER_TOKEN || null,
+    aiBaseUrl: process.env.AI_BASE_URL ?? process.env.NINEROUTER_BASE_URL ?? 'http://100.65.138.58:20128/v1',
+    aiApiKey: process.env.AI_API_KEY ?? process.env.NINEROUTER_API_KEY ?? process.env.OPENROUTER_API_KEY ?? '',
+    aiModel: process.env.AI_MODEL ?? 'ag/gemini-3.7-flash-high',
   };
 }

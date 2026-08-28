@@ -256,6 +256,7 @@
     <button data-view="card">Cartão</button>
     <button data-view="recurrences">Recorrências</button>
     <button data-view="analytics">Análises</button>
+    <button data-view="ai">Assistente IA</button>
   </nav>
 
   <div id="alerts" class="grid" style="margin-bottom:12px"></div>
@@ -529,6 +530,40 @@
         </div>
       </div>
       <div class="vault-shards" id="vault-shards"></div>
+    </section>
+  </div>
+
+  <!-- ================= ASSISTENTE IA (F5) ================= -->
+  <div id="view-ai" class="hidden">
+    <section class="grid cols-2" style="margin-bottom:12px">
+      <div class="card">
+        <h2>Ações Rápidas de IA <span class="lore">· Análise Narrativa & Factual (9Router Gemini 3.7 Flash)</span></h2>
+        <div class="meta" style="margin-bottom:12px">
+          A IA nunca recalcula valores: ela lê as métricas fechadas pelo backend e explica o mês sem expor dados pessoais.
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button class="link" style="background:var(--surface2);padding:10px 14px;border-radius:10px;border:1px solid var(--border);color:var(--text);font-weight:600" id="btn-ai-narrative">
+            ✨ Gerar Narrativa Completa do Mês
+          </button>
+          <button class="link" style="background:var(--surface2);padding:10px 14px;border-radius:10px;border:1px solid var(--border);color:var(--text);font-weight:600" id="btn-ai-forecast">
+            🔮 Comentar Projeção & Incertezas do Ritmo
+          </button>
+          <button class="link" style="background:var(--surface2);padding:10px 14px;border-radius:10px;border:1px solid var(--border);color:var(--text);font-weight:600" id="btn-ai-suggest-category">
+            🏷️ Sugerir Categorização para Lançamento Pendente
+          </button>
+          <button class="link" style="background:var(--surface2);padding:10px 14px;border-radius:10px;border:1px solid var(--border);color:var(--text);font-weight:600" id="btn-ai-explain-anomaly">
+            ⚠️ Explicar Alerta / Anomalia Recente
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Resultado da IA <span class="lore" id="ai-status">· Pronto para consulta</span></h2>
+        <div id="ai-output" style="min-height:160px;font-size:13px;line-height:1.6;color:var(--text2)">
+          <div class="empty">Selecione uma ação ao lado para receber a análise contextual do mês selecionado.</div>
+        </div>
+        <div class="meta" id="ai-meta" style="margin-top:12px;border-top:1px solid var(--border);padding-top:8px"></div>
+      </div>
     </section>
   </div>
 
@@ -1392,6 +1427,78 @@ document.addEventListener('click', async (event) => {
   }
 });
 el('drawer-close').addEventListener('click', () => el('drawer').close());
+
+// ------------------------- Assistente IA (F5) -------------------------------
+async function runAIAction(action, targetRef = null) {
+  const output = el('ai-output');
+  const status = el('ai-status');
+  const meta = el('ai-meta');
+
+  output.innerHTML = '<div class="empty">Consultando Gemini 3.7 Flash via 9Router… Aguarde alguns segundos.</div>';
+  status.textContent = '· Processando análise…';
+  meta.textContent = '';
+
+  try {
+    const res = await fetch('/api/v1/ai/actions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action,
+        period: state.month,
+        targetRef,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message ?? `Erro HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    const result = data.data.result;
+    status.textContent = '· Análise concluída';
+
+    let html = '';
+    if (action === 'MONTHLY_NARRATIVE') {
+      html = `
+        <h3 style="margin:0 0 8px;color:var(--text);font-size:15px">${result.title ?? 'Resumo do Mês'}</h3>
+        <p style="margin:0 0 10px">${result.summary ?? ''}</p>
+        ${result.changes?.length ? `<div style="margin-bottom:8px"><strong>Mudanças relevantes:</strong><ul style="margin:4px 0 8px 20px;padding:0">${result.changes.map((c) => `<li>${c}</li>`).join('')}</ul></div>` : ''}
+        ${result.alerts?.length ? `<div><strong>Pontos de atenção:</strong><ul style="margin:4px 0 8px 20px;padding:0">${result.alerts.map((a) => `<li style="color:var(--warning)">${a}</li>`).join('')}</ul></div>` : ''}
+      `;
+    } else if (action === 'COMMENT_FORECAST') {
+      html = `
+        <h3 style="margin:0 0 8px;color:var(--text);font-size:15px">${result.title ?? 'Comentário da Projeção'}</h3>
+        <p style="margin:0">${result.body ?? ''}</p>
+      `;
+    } else if (action === 'SUGGEST_CATEGORY') {
+      html = `
+        <h3 style="margin:0 0 8px;color:var(--text);font-size:15px">Sugestão de Categoria</h3>
+        <p><strong>Categoria sugerida:</strong> ${result.categoryName ?? 'Não identificada'} (confiança: ${Math.round((result.confidence ?? 0) * 100)}%)</p>
+        <p><strong>Motivo:</strong> ${result.reason ?? 'Padrão inferido a partir da descrição limpa'}</p>
+      `;
+    } else if (action === 'EXPLAIN_ANOMALY') {
+      html = `
+        <h3 style="margin:0 0 8px;color:var(--text);font-size:15px">${result.title ?? 'Explicação do Alerta'}</h3>
+        <p>${result.explanation ?? ''}</p>
+        ${result.suggestedVerification ? `<p><strong>Sugestão de verificação:</strong> ${result.suggestedVerification}</p>` : ''}
+      `;
+    } else {
+      html = `<pre style="white-space:pre-wrap;font-family:inherit">${JSON.stringify(result, null, 2)}</pre>`;
+    }
+
+    output.innerHTML = html;
+    meta.innerHTML = `Modelo: <b>ag/gemini-3.7-flash-high (9Router)</b> · Métrica(s) citada(s): <code>${data.data.metricRefs?.join(', ') || 'nenhuma'}</code> · Status: <b>${data.data.freshnessStatus}</b>`;
+  } catch (err) {
+    status.textContent = '· Erro na chamada';
+    output.innerHTML = `<div class="empty" style="color:var(--danger)">Não foi possível obter a análise da IA: ${err.message}</div>`;
+  }
+}
+
+el('btn-ai-narrative')?.addEventListener('click', () => runAIAction('MONTHLY_NARRATIVE'));
+el('btn-ai-forecast')?.addEventListener('click', () => runAIAction('COMMENT_FORECAST'));
+el('btn-ai-suggest-category')?.addEventListener('click', () => runAIAction('SUGGEST_CATEGORY'));
+el('btn-ai-explain-anomaly')?.addEventListener('click', () => runAIAction('EXPLAIN_ANOMALY'));
 
 fillPeriods();
 setupNav();
