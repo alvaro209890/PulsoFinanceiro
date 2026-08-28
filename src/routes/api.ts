@@ -17,11 +17,13 @@ import { syncItem } from '../jobs/sync.js';
 import { monthlySummary } from '../metrics.js';
 import { receiveEnvelope, processInbox } from '../jobs/inbox.js';
 import { registerV1Routes } from './v1.js';
+import { registerAgentRoutes } from './agent.js';
 
 const PERIOD_RE = /^\d{4}-\d{2}$/;
 
 export function registerRoutes(app: FastifyInstance, db: Db): void {
   registerV1Routes(app, db);
+  registerAgentRoutes(app, db);
 
   app.get('/api/health', async () => {
     const integrity = db.pragma('quick_check', { simple: true });
