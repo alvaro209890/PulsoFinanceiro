@@ -56,6 +56,7 @@ export async function callAI(
     messages: options.messages,
     temperature: options.temperature ?? 0.2,
     max_tokens: options.maxTokens ?? 1000,
+    stream: false,
   };
 
   if (options.responseFormatJson) {
@@ -77,28 +78,52 @@ export async function callAI(
     );
   }
 
-  const data = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-    model?: string;
-    usage?: {
-      prompt_tokens?: number;
-      completion_tokens?: number;
-      total_tokens?: number;
-    };
-  };
+  const text = await res.text();
+  let content = '';
+  let model = cfg.aiModel;
+  let usage: AIChatCompletionResponse['usage'] = undefined;
 
-  const choice = data.choices?.[0];
-  const content = choice?.message?.content?.trim() ?? '';
-
-  return {
-    content,
-    model: data.model ?? cfg.aiModel,
-    usage: data.usage
-      ? {
+  // Lida com resposta JSON pura ou Server-Sent Events (SSE) se o router enviar stream por padrão
+  if (text.startsWith('data:')) {
+    const lines = text.split('\n');
+    for (const line of lines) {
+      if (line.startsWith('data:') && !line.includes('[DONE]')) {
+        try {
+          const chunk = JSON.parse(line.slice(5).trim());
+          const delta = chunk.choices?.[0]?.delta?.content ?? chunk.choices?.[0]?.message?.content ?? '';
+          content += delta;
+          if (chunk.model) model = chunk.model;
+        } catch {}
+      }
+    }
+  } else {
+    try {
+      const data = JSON.parse(text) as {
+        choices?: Array<{ message?: { content?: string } }>;
+        model?: string;
+        usage?: {
+          prompt_tokens?: number;
+          completion_tokens?: number;
+          total_tokens?: number;
+        };
+      };
+      content = data.choices?.[0]?.message?.content?.trim() ?? '';
+      if (data.model) model = data.model;
+      if (data.usage) {
+        usage = {
           promptTokens: data.usage.prompt_tokens ?? 0,
           completionTokens: data.usage.completion_tokens ?? 0,
           totalTokens: data.usage.total_tokens ?? 0,
-        }
-      : undefined,
+        };
+      }
+    } catch {
+      content = text.trim();
+    }
+  }
+
+  return {
+    content: content.trim(),
+    model,
+    usage,
   };
 }
